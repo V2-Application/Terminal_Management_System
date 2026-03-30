@@ -1,146 +1,158 @@
 @{
     ViewData["Title"] = "FY-Close Control";
     var activeJob = ViewBag.ActiveJob as HO.Domain.Entities.FinancialYearJob;
-    var packages  = ViewBag.Packages as IEnumerable<HO.Domain.Entities.ScriptPackage> ?? Enumerable.Empty<HO.Domain.Entities.ScriptPackage>();
+    var packages  = ViewBag.Packages as IEnumerable<HO.Domain.Entities.ScriptPackage>
+                    ?? Enumerable.Empty<HO.Domain.Entities.ScriptPackage>();
 }
 
-<div class="row g-3">
-    <div class="col-lg-6">
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
 
-        @if (activeJob != null)
-        {
-            <!-- Active job status card -->
-            <div class="card mb-3">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <span class="fw-semibold">Active Batch — @activeJob.FYYear</span>
-                    <span class="badge @(activeJob.Status.ToString()=="Running"?"bg-success":"bg-warning text-dark")">
-                        @activeJob.Status
-                    </span>
-                </div>
-                <div class="card-body">
-                    <div class="row g-2 mb-3">
-                        <div class="col-3 text-center"><div class="text-muted small">Total</div><div class="fs-4 fw-semibold">@activeJob.TotalStores</div></div>
-                        <div class="col-3 text-center"><div class="text-muted small">Done</div><div class="fs-4 fw-semibold text-success">@activeJob.CompletedStores</div></div>
-                        <div class="col-3 text-center"><div class="text-muted small">Failed</div><div class="fs-4 fw-semibold text-danger">@activeJob.FailedStores</div></div>
-                        <div class="col-3 text-center"><div class="text-muted small">Offline</div><div class="fs-4 fw-semibold text-secondary">@activeJob.OfflineStores</div></div>
-                    </div>
-                    <div class="progress mb-3" style="height:10px">
-                        @{ var pct = activeJob.TotalStores > 0 ? activeJob.CompletedStores * 100 / activeJob.TotalStores : 0; }
-                        <div class="progress-bar bg-success" style="width:@pct%"></div>
-                    </div>
-                    <div class="d-flex gap-2">
-                        @if (activeJob.Status.ToString() == "Running")
-                        {
-                            <form asp-action="Pause" method="post">
-                                @Html.AntiForgeryToken()
-                                <input type="hidden" name="fyJobId" value="@activeJob.FYJobId" />
-                                <button class="btn btn-sm btn-warning">Pause Dispatches</button>
-                            </form>
-                        }
-                        else
-                        {
-                            <form asp-action="Resume" method="post">
-                                @Html.AntiForgeryToken()
-                                <input type="hidden" name="fyJobId" value="@activeJob.FYJobId" />
-                                <button class="btn btn-sm btn-success">Resume</button>
-                            </form>
-                        }
-                        <a asp-controller="Dashboard" asp-action="Index" class="btn btn-sm btn-outline-primary">View Dashboard</a>
-                    </div>
-                </div>
-            </div>
-        }
-        else
-        {
-            <!-- Start new batch form -->
-            <div class="card">
-                <div class="card-header fw-semibold">Start FY-Close Batch</div>
-                <div class="card-body">
-                    <form asp-action="Start" method="post">
-                        @Html.AntiForgeryToken()
-                        <div class="mb-3">
-                            <label class="form-label small fw-semibold">FY Year</label>
-                            <input type="text" name="fyYear" class="form-control" value="FY2025" required />
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label small fw-semibold">DLL Package (FY_CLOSE)</label>
-                            <select name="scriptPackageId" class="form-select" required>
-                                <option value="">— Select package —</option>
-                                @foreach (var p in packages)
-                                {
-                                    <option value="@p.PackageId">@p.PackageName (v@p.Version)</option>
-                                }
-                            </select>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label small fw-semibold">Rollback Package</label>
-                            <select name="rollbackPackageId" class="form-select" required>
-                                <option value="">— Select rollback package —</option>
-                                @foreach (var p in packages)
-                                {
-                                    <option value="@p.PackageId">@p.PackageName (v@p.Version)</option>
-                                }
-                            </select>
-                        </div>
-                        <div class="row g-2 mb-3">
-                            <div class="col-6">
-                                <label class="form-label small fw-semibold">Window Start</label>
-                                <input type="datetime-local" name="windowStart" class="form-control"
-                                       value="@DateTime.Today.AddDays(-1).ToString("yyyy-MM-dd")T23:00" />
-                            </div>
-                            <div class="col-6">
-                                <label class="form-label small fw-semibold">Window End</label>
-                                <input type="datetime-local" name="windowEnd" class="form-control"
-                                       value="@DateTime.Today.AddDays(1).ToString("yyyy-MM-dd")T04:00" />
-                            </div>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label small fw-semibold">Wave Size: <span id="waveLabel">50</span> stores/wave</label>
-                            <input type="range" name="waveSize" class="form-range" min="1" max="100" value="50"
-                                   oninput="document.getElementById('waveLabel').textContent=this.value" />
-                        </div>
-                        <div class="alert alert-warning small">
-                            <strong>Warning:</strong> This will lock billing on all stores during execution.
-                            Ensure new DLL package is uploaded and verified before starting.
-                        </div>
-                        <button type="submit" class="btn btn-danger w-100">
-                            Start FY-Close Batch for FY2025
-                        </button>
-                    </form>
-                </div>
-            </div>
-        }
-    </div>
-
-    <div class="col-lg-6">
-        <!-- Step sequence -->
-        <div class="card mb-3">
-            <div class="card-header fw-semibold">Execution Sequence</div>
-            <div class="card-body">
+<!-- Left column -->
+<div>
+@if (activeJob != null)
+{
+    <!-- Active job card -->
+    <div class="card mb-3">
+        <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
+            <span>Active Batch — @activeJob.FYYear</span>
+            <span class="badge @(activeJob.Status.ToString()=="Running"?"status-completed":"status-running")">@activeJob.Status</span>
+        </div>
+        <div class="card-body">
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-bottom:16px">
                 @{
-                    var steps = new[]
-                    {
-                        ("1", "IT NSO Setup",        "Firewall, RDP port, timezone, .NET 3.5, SAP config",  "#185FA5"),
-                        ("2", "FY-CLOSE.BAT",         "Kill POS → Deploy new DLLs → Clear IsolatedStorage", "#3B6D11"),
-                        ("3", "Time → Test Server",   "Sync clock to 192.168.144.131 for test billing",     "#854F0B"),
-                        ("4", "Time → Prod Server",   "Sync clock to 192.168.144.158, unlock billing",      "#993556"),
-                    };
+                    void Tile(string label, string val, string color) {
+                        <div style="text-align:center;background:#F8F9FA;border-radius:6px;padding:10px">
+                            <div style="font-size:11px;color:#888;margin-bottom:2px">@label</div>
+                            <div style="font-size:22px;font-weight:700;color:@color;font-family:monospace">@val</div>
+                        </div>;
+                    }
                 }
-                @foreach (var (num, label, desc, color) in steps)
+                @{ Tile("Total", (activeJob.TotalStores??0).ToString(), "#212529"); }
+                @{ Tile("Done",  activeJob.CompletedStores.ToString(), "#3B6D11"); }
+                @{ Tile("Failed",activeJob.FailedStores.ToString(),    "#A32D2D"); }
+                @{ Tile("Offline",activeJob.OfflineStores.ToString(),  "#5F5E5A"); }
+            </div>
+            @{
+                var pct = (activeJob.TotalStores??1) > 0
+                    ? activeJob.CompletedStores * 100 / (activeJob.TotalStores??1) : 0;
+            }
+            <div class="progress mb-3">
+                <div class="progress-bar bg-success" style="width:@pct%"></div>
+            </div>
+            <div style="display:flex;gap:8px">
+                @if (activeJob.Status == HO.Domain.Enums.FYJobStatus.Running)
                 {
-                    <div class="d-flex gap-3 mb-3">
-                        <div style="width:32px;height:32px;border-radius:50%;background:@color;
-                                    display:flex;align-items:center;justify-content:center;
-                                    color:white;font-weight:600;font-size:14px;flex-shrink:0">@num</div>
-                        <div>
-                            <div class="fw-semibold" style="font-size:13px">@label</div>
-                            <div class="text-muted" style="font-size:12px">@desc</div>
-                        </div>
-                    </div>
+                    <form asp-action="Pause" method="post">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="fyJobId" value="@activeJob.FYJobId" />
+                        <button class="btn btn-sm" style="background:#FAEEDA;color:#854F0B;border:1px solid #F0D0A0">Pause Dispatches</button>
+                    </form>
                 }
+                else
+                {
+                    <form asp-action="Resume" method="post">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="fyJobId" value="@activeJob.FYJobId" />
+                        <button class="btn btn-sm" style="background:#EAF3DE;color:#3B6D11;border:1px solid #B0D090">Resume</button>
+                    </form>
+                }
+                <a href="/Dashboard" class="btn btn-sm btn-outline">View Live Dashboard</a>
             </div>
         </div>
-
-        @await Html.PartialAsync("_AIAssistant")
     </div>
+}
+else
+{
+    <!-- Start new batch form -->
+    <div class="card">
+        <div class="card-header">Start FY-Close Batch</div>
+        <div class="card-body">
+            <form asp-action="Start" method="post">
+                @Html.AntiForgeryToken()
+                <div style="margin-bottom:14px">
+                    <label class="form-label">FY Year</label>
+                    <input name="fyYear" class="form-control" value="FY2025" required />
+                </div>
+                <div style="margin-bottom:14px">
+                    <label class="form-label">DLL Package (FY_CLOSE)</label>
+                    <select name="scriptPackageId" class="form-select" required>
+                        <option value="">— Select package —</option>
+                        @foreach (var p in packages.Where(p => !p.IsRollbackPackage))
+                        {
+                            <option value="@p.PackageId">@p.PackageName (v@p.Version)</option>
+                        }
+                    </select>
+                </div>
+                <div style="margin-bottom:14px">
+                    <label class="form-label">Rollback Package (previous FY)</label>
+                    <select name="rollbackPackageId" class="form-select" required>
+                        <option value="">— Select rollback —</option>
+                        @foreach (var p in packages)
+                        {
+                            <option value="@p.PackageId">@p.PackageName (v@p.Version)</option>
+                        }
+                    </select>
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+                    <div>
+                        <label class="form-label">Window Start</label>
+                        <input type="datetime-local" name="windowStart" class="form-control"
+                               value="@DateTime.Today.AddHours(23).ToString("yyyy-MM-ddTHH:mm")" />
+                    </div>
+                    <div>
+                        <label class="form-label">Window End</label>
+                        <input type="datetime-local" name="windowEnd" class="form-control"
+                               value="@DateTime.Today.AddDays(1).AddHours(4).ToString("yyyy-MM-ddTHH:mm")" />
+                    </div>
+                </div>
+                <div style="margin-bottom:16px">
+                    <label class="form-label">Wave Size: <span id="waveLabel" style="color:#185FA5;font-weight:700">50</span> stores/wave</label>
+                    <input type="range" name="waveSize" min="1" max="100" value="50"
+                           style="width:100%;margin-top:6px"
+                           oninput="document.getElementById('waveLabel').textContent=this.value" />
+                    <div style="display:flex;justify-content:space-between;font-size:11px;color:#888;margin-top:2px">
+                        <span>1 (careful)</span><span>50 (recommended)</span><span>100 (fast)</span>
+                    </div>
+                </div>
+                <div class="alert alert-warning" style="margin-bottom:14px;font-size:12px">
+                    <strong>⚠ Warning:</strong> This will lock billing at all stores during execution.
+                    Ensure the DLL package is uploaded and verified before starting.
+                </div>
+                <button type="submit" class="btn btn-primary" style="width:100%;padding:10px">
+                    🚀 Start FY-Close Batch
+                </button>
+            </form>
+        </div>
+    </div>
+}
+</div>
+
+<!-- Right column: Step sequence -->
+<div>
+    <div class="card">
+        <div class="card-header">Execution Sequence (all stores)</div>
+        <div class="card-body">
+            @{
+                var steps = new (string num, string label, string desc, string color)[]
+                {
+                    ("1","IT NSO Setup",       "Firewall rules, RDP port 1010, IST timezone, .NET 3.5, SAP config",  "#185FA5"),
+                    ("2","FY-CLOSE.BAT",       "Kill POS.exe → Copy new DLLs → Clear IsolatedStorage cache",         "#3B6D11"),
+                    ("3","Time → Test Server", "Sync clock to 192.168.144.131 — test billing on new FY series",       "#854F0B"),
+                    ("4","Time → Prod Server", "Sync clock to 192.168.144.158 — go live, unlock billing",             "#993556"),
+                };
+            }
+            @foreach (var (num, label, desc, color) in steps)
+            {
+                <div style="display:flex;gap:14px;margin-bottom:20px">
+                    <div style="width:32px;height:32px;border-radius:50%;background:@color;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:14px;flex-shrink:0">@num</div>
+                    <div>
+                        <div style="font-weight:600;font-size:13px;margin-bottom:2px">@label</div>
+                        <div style="font-size:12px;color:#888">@desc</div>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
 </div>

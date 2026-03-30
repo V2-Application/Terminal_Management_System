@@ -1,56 +1,58 @@
 @model IEnumerable<HO.Domain.Entities.Store>
 @{
     ViewData["Title"] = "Store Master";
+    var storeList = Model.ToList();
 }
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <div>
-        <span class="text-muted small">@Model.Count() stores</span>
-    </div>
-    <div class="d-flex gap-2">
-        @foreach (var r in new[]{"All","North","South","East","West","Central"})
+
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+    <span style="color:#888;font-size:13px">@storeList.Count stores registered</span>
+    <div style="display:flex;gap:6px;flex-wrap:wrap">
+        @foreach (var r in new[]{"","North","South","East","West","Central"})
         {
-            <a asp-action="Index" asp-route-region="@(r=="All"?"":r)"
-               class="btn btn-sm @(ViewBag.Region==r||( ViewBag.Region==null&&r=="All")?"btn-primary":"btn-outline-secondary")">@r</a>
+            var isActive = r == "" ? ViewBag.Region == null || ViewBag.Region == ""
+                                   : ViewBag.Region == r;
+            <a asp-action="Index" asp-route-region="@r"
+               style="padding:4px 12px;font-size:12px;border-radius:20px;border:1px solid @(isActive?"#185FA5":"#DDD");background:@(isActive?"#185FA5":"#fff");color:@(isActive?"#fff":"#555")">
+                @(r == "" ? "All" : r)
+            </a>
         }
     </div>
 </div>
 
 <div class="card">
-    <div class="card-body p-0">
-        <table class="table table-hover mb-0">
-            <thead class="table-light">
+    <div class="p-0">
+        <table>
+            <thead>
                 <tr>
                     <th>Store ID</th><th>Name</th><th>Region</th><th>Zone</th>
-                    <th>Terminals</th><th>FY Status</th><th>Priority</th><th></th>
+                    <th>FY Status</th><th>Terminals</th><th>Priority</th><th></th>
                 </tr>
             </thead>
             <tbody>
-            @foreach (var store in Model)
+            @foreach (var store in storeList)
             {
-                <tr onclick="location.href='@Url.Action("Details","Store",new{id=store.StoreId})'" style="cursor:pointer">
-                    <td class="font-monospace fw-semibold" style="font-size:12px">@store.StoreCode</td>
+                var sc = store.FYCloseStatus.ToString() switch {
+                    "Completed" => "status-completed",
+                    "Failed"    => "status-failed",
+                    "Offline"   => "status-offline",
+                    _           => "status-pending"
+                };
+                <tr onclick="location.href='/Store/Details/@store.StoreId'" style="cursor:pointer">
+                    <td><span style="font-family:monospace;font-weight:600;font-size:12px;color:#1F3864">@store.StoreCode</span></td>
                     <td>@store.StoreName</td>
-                    <td><span class="badge bg-light text-dark">@store.Region</span></td>
-                    <td class="text-muted small">@store.Zone</td>
-                    <td>@store.Terminals.Count</td>
-                    <td>
-                        @{
-                            var cls = store.FYCloseStatus.ToString() switch {
-                                "Completed" => "status-completed",
-                                "Failed"    => "status-failed",
-                                "Pending"   => "status-pending",
-                                "Offline"   => "status-offline",
-                                _           => "status-pending"
-                            };
-                        }
-                        <span class="status-badge @cls">● @store.FYCloseStatus</span>
-                    </td>
-                    <td class="text-center">
-                        <span class="badge @(store.Priority==1?"bg-danger":store.Priority==2?"bg-warning text-dark":"bg-light text-dark")">
+                    <td><span style="font-size:11px;background:#EEE;color:#555;padding:2px 7px;border-radius:4px">@store.Region</span></td>
+                    <td style="font-size:12px;color:#888">@store.Zone</td>
+                    <td><span class="badge @sc">● @store.FYCloseStatus</span></td>
+                    <td style="text-align:center;font-size:12px;color:#555">@store.Terminals.Count</td>
+                    <td style="text-align:center">
+                        <span style="font-size:11px;padding:2px 7px;border-radius:4px;background:@(store.Priority==1?"#FCEBEB":store.Priority==2?"#FAEEDA":"#F0F0F0");color:@(store.Priority==1?"#A32D2D":store.Priority==2?"#854F0B":"#555")">
                             P@store.Priority
                         </span>
                     </td>
-                    <td><a class="btn btn-sm btn-outline-secondary" asp-action="Details" asp-route-id="@store.StoreId">Details</a></td>
+                    <td onclick="event.stopPropagation()">
+                        <a href="/Store/Details/@store.StoreId"
+                           style="font-size:11px;padding:3px 8px;background:#F0F0F0;color:#555;border-radius:4px">Details →</a>
+                    </td>
                 </tr>
             }
             </tbody>
