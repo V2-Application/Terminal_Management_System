@@ -1,3 +1,4 @@
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
@@ -5,72 +6,71 @@ namespace HO.Infrastructure.Persistence;
 
 /// <summary>
 /// Handles DB creation and seeding robustly.
-/// Works even if the DB exists but has no tables (handles failed migration edge case).
+/// Clears the connection pool between EnsureDeleted and EnsureCreated
+/// so stale connections don't cause 'connection is broken' errors.
 /// </summary>
 public static class DatabaseInitializer
 {
     public static async Task InitializeAsync(AppDbContext db, ILogger logger)
     {
+        var connString = db.Database.GetConnectionString()!;
+
+        // ── Step 1: Check if tables already exist ────────────────────────────
+        bool tablesExist = false;
         try
         {
-            // Check if Stores table exists — if not, recreate from scratch
-            var tablesExist = await TableExistsAsync(db, "Stores");
-
-            if (!tablesExist)
-            {
-                logger.LogInformation("Tables not found — creating schema from EF model");
-
-                // Drop any partial schema (safe in dev — removes __EFMigrationsHistory etc.)
-                await db.Database.EnsureDeletedAsync();
-                await db.Database.EnsureCreatedAsync();
-
-                logger.LogInformation("Schema created — seeding sample data");
-                await DatabaseSeeder.SeedAsync(db, logger);
-            }
-            else
-            {
-                logger.LogInformation("Database schema OK — checking seed data");
-                await DatabaseSeeder.SeedAsync(db, logger);
-            }
+            // Just querying the table count is enough — will throw if table missing
+            tablesExist = await db.Stores.AnyAsync() || true;
+            logger.LogInformation("Database tables found — checking seed data");
+        }
+        catch (SqlException ex) when (
+            ex.Message.Contains("Invalid object name") ||
+            ex.Message.Contains("Cannot open database") ||
+            ex.Number == 208  /* Invalid object name */ ||
+            ex.Number == 4060 /* Cannot open database */)
+        {
+            tablesExist = false;
+            logger.LogInformation("Tables missing (SqlException {N}) — will create schema", ex.Number);
         }
         catch (Exception ex)
         {
-            logger.LogError(ex,
-                "Database initialization failed. " +
-                "Check your connection string and ensure SQL Server is running. " +
-                "Connection string: {Cs}",
-                db.Database.GetConnectionString()?[..Math.Min(60, db.Database.GetConnectionString()?.Length ?? 0)]);
-            throw; // Re-throw so startup shows a clear error
+            tablesExist = false;
+            logger.LogWarning(ex, "Could not check tables — will attempt schema creation");
         }
-    }
 
-    private static async Task<bool> TableExistsAsync(AppDbContext db, string tableName)
-    {
-        try
+        // ── Step 2: Create schema if needed ──────────────────────────────────
+        if (!tablesExist)
         {
-            var conn = db.Database.GetDbConnection();
-            await db.Database.OpenConnectionAsync();
+            logger.LogInformation("Creating database schema from EF model...");
 
-            using var cmd = conn.CreateCommand();
-            cmd.CommandText =
-                "SELECT COUNT(1) FROM INFORMATION_SCHEMA.TABLES " +
-                "WHERE TABLE_SCHEMA = 'dbo' AND TABLE_NAME = @name";
+            try
+            {
+                // First: drop existing (may be empty from a previous failed attempt)
+                await db.Database.EnsureDeletedAsync();
 
-            var param = cmd.CreateParameter();
-            param.ParameterName = "@name";
-            param.Value = tableName;
-            cmd.Parameters.Add(param);
+                // CRITICAL: clear connection pool so EnsureCreated gets a fresh connection
+                SqlConnection.ClearAllPools();
+                await Task.Delay(500); // brief pause for pool to drain
 
-            var result = await cmd.ExecuteScalarAsync();
-            return Convert.ToInt32(result) > 0;
+                // Dispose and re-open so EF also gets a fresh connection
+                await db.Database.CloseConnectionAsync();
+            }
+            catch (Exception ex)
+            {
+                logger.LogDebug(ex, "EnsureDeleted warning (ignorable if DB did not exist)");
+            }
+
+            // Now create all tables from the EF model
+            await db.Database.EnsureCreatedAsync();
+            logger.LogInformation("Schema created successfully");
+
+            // ── Step 3: Seed sample data ──────────────────────────────────
+            logger.LogInformation("Seeding sample data...");
+            await DatabaseSeeder.SeedAsync(db, logger);
+            return;
         }
-        catch
-        {
-            return false; // DB doesn't exist at all
-        }
-        finally
-        {
-            // Don't close — EF manages connection lifecycle
-        }
+
+        // ── Tables exist — just check seed ────────────────────────────────────
+        await DatabaseSeeder.SeedAsync(db, logger);
     }
 }

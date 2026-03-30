@@ -23,10 +23,12 @@ public static class InfrastructureServiceExtensions
         IConfiguration configuration)
     {
         // ── Database ──────────────────────────────────────────────────────────
+        // NOTE: No EnableRetryOnFailure here — it conflicts with EnsureDeleted/EnsureCreated
+        // because the retry logic holds connections open across the drop→create cycle.
+        // Re-add EnableRetryOnFailure in production once DB is stable.
         services.AddDbContext<AppDbContext>(opts =>
             opts.UseSqlServer(
-                configuration.GetConnectionString("DefaultConnection"),
-                sql => sql.EnableRetryOnFailure(3)));
+                configuration.GetConnectionString("DefaultConnection")));
 
         // ── Repositories ─────────────────────────────────────────────────────
         services.AddScoped<IStoreRepository,    StoreRepository>();
@@ -44,22 +46,19 @@ public static class InfrastructureServiceExtensions
         services.AddScoped<IAuditService,        AuditService>();
         services.AddScoped<INotificationService, EmailNotificationService>();
 
-        // ISignalRService — uses factory so IHubContext<DashboardHub> is resolved
-        // at request-time rather than startup, avoiding startup failure in HO.API
-        // where SignalR is not mounted. Falls back to NullSignalRService if unavailable.
+        // ISignalRService via scoped factory — safe for HO.API context (no SignalR hub)
         services.AddScoped<ISignalRService>(sp =>
         {
             try
             {
-                var hubContext = sp.GetService<IHubContext<DashboardHub>>();
-                if (hubContext != null)
+                var hub = sp.GetService<IHubContext<DashboardHub>>();
+                if (hub != null)
                 {
                     var log = sp.GetRequiredService<ILogger<DashboardHubService>>();
-                    return new DashboardHubService(hubContext, log);
+                    return new DashboardHubService(hub, log);
                 }
             }
-            catch { /* SignalR not registered in this host (e.g., HO.API) */ }
-
+            catch { /* SignalR not registered in this host */ }
             return new NullSignalRService();
         });
 
