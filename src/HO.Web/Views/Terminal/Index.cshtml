@@ -2,51 +2,82 @@
 @{
     ViewData["Title"] = "Terminal Master";
     var list = Model.ToList();
+    var online  = list.Count(t => t.Status == HO.Domain.Enums.TerminalStatus.Active);
+    var offline = list.Count(t => t.Status == HO.Domain.Enums.TerminalStatus.Offline);
 }
-<div style="color:#888;font-size:13px;margin-bottom:12px">@list.Count terminals registered</div>
-<div class="card">
-    <div class="p-0">
-        <table>
-            <thead>
-                <tr>
-                    <th>Terminal</th><th>Store</th><th>Machine</th><th>IP Address</th>
-                    <th>Status</th><th>Agent v.</th><th>Disk Free</th><th>Last Heartbeat</th>
-                </tr>
-            </thead>
-            <tbody>
-            @foreach (var t in list)
-            {
-                var ts = t.Status.ToString() switch {
-                    "Active"   => "background:#EAF3DE;color:#3B6D11",
-                    "Offline"  => "background:#F1EFE8;color:#5F5E5A",
-                    _          => "background:#F0F0F0;color:#6C757D"
-                };
-                <tr>
-                    <td>
-                        <span style="font-family:monospace;font-weight:600;font-size:12px">@t.TerminalCode</span>
-                        @if (t.IsPrimary) { <span style="font-size:10px;background:#E6F1FB;color:#185FA5;padding:1px 5px;border-radius:3px;margin-left:4px">★</span> }
-                    </td>
-                    <td style="font-size:12px;color:#555">@(t.Store?.StoreCode ?? "—")</td>
-                    <td style="font-size:12px;color:#888">@t.MachineName</td>
-                    <td style="font-family:monospace;font-size:11px;color:#888">@(t.IpAddress ?? "—")</td>
-                    <td><span style="@ts;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:500">@t.Status</span></td>
-                    <td style="font-family:monospace;font-size:11px">@(t.AgentVersion ?? "—")</td>
-                    <td style="font-size:12px;color:@(t.DiskFreeGB < 5 ? "#A32D2D" : "#3B6D11")">
-                        @(t.DiskFreeGB.HasValue ? t.DiskFreeGB.Value.ToString("F0") + " GB" : "—")
-                    </td>
-                    <td style="font-size:11px;color:#888">
-                        @if (t.LastHeartbeat.HasValue)
-                        {
-                            var ago = DateTime.UtcNow - t.LastHeartbeat.Value;
-                            <span style="color:@(ago.TotalMinutes < 10?"#3B6D11":ago.TotalHours < 1?"#854F0B":"#A32D2D")">
-                                @t.LastHeartbeat.Value.ToString("HH:mm dd-MMM")
-                            </span>
-                        }
-                        else { <span>Never</span> }
-                    </td>
-                </tr>
-            }
-            </tbody>
-        </table>
-    </div>
+
+<!-- Summary row -->
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px">
+    @{
+        void TileSmall(string label, string val, string bg, string color) {
+            <div style="background:@bg;border-radius:8px;padding:12px;text-align:center;border:1px solid #E8E8E8">
+                <div style="font-size:11px;color:#888;margin-bottom:2px">@label</div>
+                <div style="font-size:22px;font-weight:700;color:@color;font-family:monospace">@val</div>
+            </div>;
+        }
+    }
+    @{ TileSmall("Total Terminals",   list.Count.ToString(),    "#F8F9FA", "#212529"); }
+    @{ TileSmall("Online",            online.ToString(),         "#EAF3DE", "#3B6D11"); }
+    @{ TileSmall("Offline",           offline.ToString(),        "#FCEBEB", "#A32D2D"); }
+    @{ TileSmall("Online %",          list.Count > 0 ? (online*100/list.Count) + "%" : "—", "#F0F4FF", "#185FA5"); }
+</div>
+
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+    <span style="font-size:13px;color:#888">@list.Count terminals registered across @list.Select(t=>t.StoreId).Distinct().Count() stores</span>
+    <a href="/Store" style="padding:7px 14px;background:#185FA5;color:#fff;border-radius:6px;font-size:12px;font-weight:500">
+        + Bind New Terminal
+    </a>
+</div>
+
+<div style="background:#fff;border:1px solid #E8E8E8;border-radius:10px;overflow:hidden">
+    <table>
+        <thead>
+            <tr>
+                <th>Terminal</th><th>Store</th><th>Region</th><th>Status</th>
+                <th>Agent v.</th><th>Disk Free</th><th>POS</th><th>Last Heartbeat</th><th></th>
+            </tr>
+        </thead>
+        <tbody>
+        @foreach (var t in list)
+        {
+            var isOn = t.Status == HO.Domain.Enums.TerminalStatus.Active;
+            var statusStyle = isOn ? "background:#EAF3DE;color:#3B6D11" : "background:#FCEBEB;color:#A32D2D";
+            var lastHb = t.LastHeartbeat;
+            var ago = lastHb.HasValue ? (int)(DateTime.UtcNow - lastHb.Value).TotalMinutes : -1;
+            var hbColor = ago < 0 ? "#888" : ago < 10 ? "#3B6D11" : ago < 60 ? "#854F0B" : "#A32D2D";
+            <tr onclick="window.location='/Terminal/Details/@t.TerminalId'" style="cursor:pointer">
+                <td>
+                    <div style="font-family:monospace;font-weight:600;font-size:12px;color:#1F3864">@t.TerminalCode</div>
+                    @if (t.IsPrimary) { <span style="font-size:10px;background:#E6F1FB;color:#185FA5;padding:1px 6px;border-radius:3px">★ PRIMARY</span> }
+                </td>
+                <td style="font-size:12px">@(t.Store?.StoreCode ?? "—")</td>
+                <td style="font-size:12px;color:#888">@(t.Store?.Region ?? "—")</td>
+                <td>
+                    <span style="@statusStyle;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600">
+                        @(isOn ? "● ONLINE" : "● OFFLINE")
+                    </span>
+                </td>
+                <td style="font-family:monospace;font-size:11px;color:#555">@(t.AgentVersion ?? "—")</td>
+                <td style="font-size:12px;color:@(t.DiskFreeGB < 5 ? "#A32D2D" : t.DiskFreeGB.HasValue ? "#3B6D11" : "#888")">
+                    @(t.DiskFreeGB.HasValue ? t.DiskFreeGB.Value.ToString("F0") + " GB" : "—")
+                </td>
+                <td style="font-size:11px;text-align:center">
+                    @{
+                        var posHb = ViewBag.LatestHeartbeats as Dictionary<Guid,bool>;
+                    }
+                    —
+                </td>
+                <td style="font-size:11px;color:@hbColor">
+                    @(lastHb.HasValue ? lastHb.Value.ToString("HH:mm dd-MMM") + (ago >= 0 ? $" ({ago}m ago)" : "") : "Never")
+                </td>
+                <td onclick="event.stopPropagation()" style="text-align:right;white-space:nowrap">
+                    <a href="/Terminal/Details/@t.TerminalId"
+                       style="font-size:11px;padding:4px 10px;background:#185FA5;color:#fff;border-radius:4px;margin-right:4px">
+                        Details / Execute
+                    </a>
+                </td>
+            </tr>
+        }
+        </tbody>
+    </table>
 </div>

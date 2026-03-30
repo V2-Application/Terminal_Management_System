@@ -1,86 +1,101 @@
 @model HO.Domain.Entities.Store
 @{
     ViewData["Title"] = Model.StoreName;
-    var activeJob = ViewBag.ActiveFYJobId as string;
 }
 
-<!-- Two column layout -->
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
+<div style="margin-bottom:12px;display:flex;justify-content:space-between;align-items:center">
+    <a href="/Store" style="font-size:13px;color:#185FA5">← Store Master</a>
+    <a href="/Terminal/Bind?storeId=@Model.StoreId"
+       style="padding:7px 14px;background:#1F3864;color:#fff;border-radius:6px;font-size:12px;font-weight:500">
+        + Bind New Terminal
+    </a>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+
     <!-- Store Info -->
-    <div class="card">
-        <div class="card-header">Store Information</div>
-        <div class="card-body">
-            <table style="width:100%">
-                <tr><td style="font-size:12px;color:#888;padding:5px 0;width:130px">Store Code</td>
-                    <td style="font-family:monospace;font-weight:600;font-size:13px;padding:5px 0">@Model.StoreCode</td></tr>
-                <tr><td style="font-size:12px;color:#888;padding:5px 0">Region / Zone</td>
-                    <td style="font-size:13px;padding:5px 0">@Model.Region / @Model.Zone</td></tr>
-                <tr><td style="font-size:12px;color:#888;padding:5px 0">Store Status</td>
-                    <td style="padding:5px 0"><span style="background:#EAF3DE;color:#3B6D11;padding:2px 8px;border-radius:4px;font-size:12px">@Model.Status</span></td></tr>
-                <tr><td style="font-size:12px;color:#888;padding:5px 0">FY Close Status</td>
-                    <td style="padding:5px 0">
-                        @{
-                            var sc = Model.FYCloseStatus.ToString() switch {
-                                "Completed" => "status-completed",
-                                "Failed" => "status-failed",
-                                "Offline" => "status-offline",
-                                _ => "status-pending"
-                            };
-                        }
-                        <span class="badge @sc">@Model.FYCloseStatus</span>
-                    </td></tr>
-                <tr><td style="font-size:12px;color:#888;padding:5px 0">Priority</td>
-                    <td style="font-size:13px;padding:5px 0">P@Model.Priority</td></tr>
-                <tr><td style="font-size:12px;color:#888;padding:5px 0">Contact</td>
-                    <td style="font-size:13px;padding:5px 0">@(Model.ContactEmail ?? "—")</td></tr>
-                <tr><td style="font-size:12px;color:#888;padding:5px 0">Phone</td>
-                    <td style="font-size:13px;padding:5px 0">@(Model.ContactPhone ?? "—")</td></tr>
-            </table>
+    <div style="background:#fff;border:1px solid #E8E8E8;border-radius:10px;overflow:hidden">
+        <div style="padding:12px 16px;background:#F8F9FA;border-bottom:1px solid #E8E8E8;font-size:13px;font-weight:600">
+            Store Information
+        </div>
+        <div style="padding:4px 0">
+            @{
+                void Row(string label, string value, string color = "#212529") {
+                    <div style="padding:8px 16px;border-bottom:1px solid #F5F5F5;display:flex;justify-content:space-between">
+                        <span style="font-size:12px;color:#888">@label</span>
+                        <span style="font-size:13px;color:@color;font-weight:500">@value</span>
+                    </div>;
+                }
+            }
+            @{ Row("Store Code", Model.StoreCode); }
+            @{ Row("Store Name", Model.StoreName); }
+            @{ Row("Region",     Model.Region + " / " + Model.Zone); }
+            @{ Row("Priority",   "P" + Model.Priority); }
+            @{ Row("Status",     Model.Status.ToString()); }
+            @{
+                var fyColor = Model.FYCloseStatus.ToString() switch {
+                    "Completed" => "#3B6D11", "Failed" => "#A32D2D", _ => "#6C757D"
+                };
+            }
+            @{ Row("FY Close Status", Model.FYCloseStatus.ToString(), fyColor); }
+            @{ Row("Contact",    Model.ContactEmail ?? "—"); }
+            @{ Row("Phone",      Model.ContactPhone ?? "—"); }
         </div>
     </div>
 
-    <!-- Terminals -->
-    <div class="card">
-        <div class="card-header">Terminals (@Model.Terminals.Count)</div>
-        <div class="p-0">
+    <!-- Terminals list -->
+    <div style="background:#fff;border:1px solid #E8E8E8;border-radius:10px;overflow:hidden">
+        <div style="padding:12px 16px;background:#F8F9FA;border-bottom:1px solid #E8E8E8;font-size:13px;font-weight:600;display:flex;justify-content:space-between;align-items:center">
+            <span>Terminals (@Model.Terminals.Count)</span>
+            <a href="/Terminal/Bind?storeId=@Model.StoreId"
+               style="font-size:11px;padding:3px 10px;background:#185FA5;color:#fff;border-radius:4px">+ Bind</a>
+        </div>
+        @if (!Model.Terminals.Any())
+        {
+            <div style="padding:32px;text-align:center;color:#888">
+                <div style="font-size:24px;margin-bottom:8px">🖥️</div>
+                <div style="font-size:13px;margin-bottom:12px">No terminals bound to this store yet</div>
+                <a href="/Terminal/Bind?storeId=@Model.StoreId"
+                   style="padding:8px 16px;background:#185FA5;color:#fff;border-radius:6px;font-size:13px;font-weight:500">
+                    Bind First Terminal
+                </a>
+            </div>
+        }
+        else
+        {
             <table>
                 <thead>
                     <tr>
-                        <th>Terminal</th><th>Status</th><th>Agent</th><th>Last Heartbeat</th>
+                        <th>Terminal</th><th>Status</th><th>Last HB</th><th></th>
                     </tr>
                 </thead>
                 <tbody>
-                @foreach (var t in Model.Terminals)
+                @foreach (var t in Model.Terminals.OrderBy(t => !t.IsPrimary))
                 {
+                    var isOn = t.Status == HO.Domain.Enums.TerminalStatus.Active;
                     <tr>
                         <td>
                             <span style="font-family:monospace;font-size:12px;font-weight:600">@t.TerminalCode</span>
-                            @if (t.IsPrimary) { <span style="font-size:10px;background:#E6F1FB;color:#185FA5;padding:1px 6px;border-radius:3px;margin-left:4px">PRIMARY</span> }
+                            @if (t.IsPrimary) { <span style="font-size:10px;background:#E6F1FB;color:#185FA5;padding:1px 5px;border-radius:3px;margin-left:4px">PRIMARY</span> }
                         </td>
                         <td>
-                            @{var ts = t.Status.ToString() switch { "Active"=>"status-completed",_=>"status-pending" };}
-                            <span class="badge @ts" style="font-size:11px">@t.Status</span>
+                            <span style="@(isOn?"background:#EAF3DE;color:#3B6D11":"background:#FCEBEB;color:#A32D2D");padding:2px 7px;border-radius:4px;font-size:11px;font-weight:500">
+                                @(isOn?"● Online":"● Offline")
+                            </span>
                         </td>
-                        <td style="font-size:11px;color:#888">@(t.AgentVersion ?? "—")</td>
                         <td style="font-size:11px;color:#888">
                             @(t.LastHeartbeat.HasValue ? t.LastHeartbeat.Value.ToString("HH:mm dd-MMM") : "Never")
+                        </td>
+                        <td>
+                            <a href="/Terminal/Details/@t.TerminalId"
+                               style="font-size:11px;padding:3px 9px;background:#F0F0F0;color:#555;border-radius:4px">
+                                Ping / Execute →
+                            </a>
                         </td>
                     </tr>
                 }
                 </tbody>
             </table>
-        </div>
+        }
     </div>
 </div>
-
-@if (Model.FYCloseStatus == HO.Domain.Enums.FYCloseStatus.Failed && !string.IsNullOrEmpty(activeJob))
-{
-    <div class="alert alert-warning" style="display:flex;align-items:center;gap:12px">
-        <span style="flex:1">This store failed FY-Close execution. Choose an action:</span>
-        <a href="/Store" class="btn btn-sm btn-outline">← Back to Stores</a>
-    </div>
-}
-else
-{
-    <a href="/Store" class="btn btn-sm btn-outline" style="font-size:12px">← Back to Store Master</a>
-}

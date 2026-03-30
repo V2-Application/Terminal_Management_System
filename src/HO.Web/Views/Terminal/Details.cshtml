@@ -1,0 +1,346 @@
+@model HO.Domain.Entities.Terminal
+@{
+    ViewData["Title"] = Model.TerminalCode + " — Terminal Detail";
+    var packages = ViewBag.Packages as IEnumerable<HO.Domain.Entities.ScriptPackage>
+                   ?? Enumerable.Empty<HO.Domain.Entities.ScriptPackage>();
+    var heartbeats = ViewBag.Heartbeats as IEnumerable<HO.Domain.Entities.Heartbeat>
+                     ?? Enumerable.Empty<HO.Domain.Entities.Heartbeat>();
+    var isOnline = Model.Status == HO.Domain.Enums.TerminalStatus.Active;
+    var statusColor = isOnline ? "#3B6D11" : "#A32D2D";
+    var statusBg    = isOnline ? "#EAF3DE" : "#FCEBEB";
+}
+
+<div style="margin-bottom:12px">
+    <a href="/Terminal" style="font-size:13px;color:#185FA5">← All Terminals</a>
+    <span style="color:#DDD;margin:0 8px">|</span>
+    <a href="/Store/Details/@Model.StoreId" style="font-size:13px;color:#185FA5">@Model.Store?.StoreCode — @Model.Store?.StoreName</a>
+</div>
+
+<!-- Header card -->
+<div style="background:#fff;border:1px solid #E8E8E8;border-radius:10px;padding:20px;margin-bottom:16px;display:flex;align-items:center;gap:20px">
+    <div style="width:56px;height:56px;border-radius:12px;background:@statusBg;display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0">
+        @(isOnline ? "🖥️" : "⚡")
+    </div>
+    <div style="flex:1">
+        <div style="font-size:20px;font-weight:700;color:#1F3864">@Model.TerminalCode
+            @if (Model.IsPrimary) { <span style="font-size:11px;background:#E6F1FB;color:#185FA5;padding:2px 8px;border-radius:4px;margin-left:8px;font-weight:500">PRIMARY</span> }
+        </div>
+        <div style="font-size:13px;color:#888;margin-top:2px">@Model.MachineName · @(Model.IpAddress ?? "IP unknown") · Agent v@(Model.AgentVersion ?? "not set")</div>
+    </div>
+    <!-- Live status + Ping button -->
+    <div style="text-align:right">
+        <div id="ping-status" style="font-size:13px;font-weight:600;color:@statusColor;background:@statusBg;padding:6px 14px;border-radius:6px;margin-bottom:8px">
+            @(isOnline ? "● ONLINE" : "● OFFLINE")
+        </div>
+        <button onclick="pingTerminal('@Model.TerminalId')"
+                id="ping-btn"
+                style="padding:7px 18px;background:#185FA5;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">
+            🔍 Ping Terminal
+        </button>
+    </div>
+</div>
+
+<!-- Main grid: Info + Execute Steps -->
+<div style="display:grid;grid-template-columns:340px 1fr;gap:16px;margin-bottom:16px">
+
+    <!-- Left: Terminal Info -->
+    <div>
+        <div style="background:#fff;border:1px solid #E8E8E8;border-radius:10px;overflow:hidden;margin-bottom:12px">
+            <div style="padding:12px 16px;background:#F8F9FA;border-bottom:1px solid #E8E8E8;font-size:13px;font-weight:600">Terminal Info</div>
+            <div style="padding:4px 0">
+                @{
+                    void InfoRow(string label, string value, string color = "#212529") {
+                        <div style="padding:8px 16px;border-bottom:1px solid #F5F5F5;display:flex;justify-content:space-between;align-items:center">
+                            <span style="font-size:12px;color:#888">@label</span>
+                            <span style="font-size:13px;color:@color;font-weight:500">@value</span>
+                        </div>;
+                    }
+                }
+                @{ InfoRow("Store",        Model.Store?.StoreName ?? "—"); }
+                @{ InfoRow("Region",       Model.Store?.Region ?? "—"); }
+                @{ InfoRow("Machine ID",   Model.MachineId[..Math.Min(16,Model.MachineId.Length)] + "..."); }
+                @{ InfoRow("OS Version",   Model.OsVersion ?? "—"); }
+                @{ InfoRow("POS Version",  Model.PosVersion ?? "—"); }
+                @{ InfoRow("Disk Free",    Model.DiskFreeGB.HasValue ? Model.DiskFreeGB.Value.ToString("F1") + " GB" : "—",
+                           Model.DiskFreeGB < 5 ? "#A32D2D" : "#3B6D11"); }
+                @{ InfoRow("FY Status",    Model.Store?.FYCloseStatus.ToString() ?? "—"); }
+                @{ InfoRow("Last Heartbeat",
+                           Model.LastHeartbeat.HasValue ? Model.LastHeartbeat.Value.ToString("HH:mm:ss dd-MMM") : "Never",
+                           isOnline ? "#3B6D11" : "#A32D2D"); }
+            </div>
+        </div>
+
+        <!-- Heartbeat history -->
+        <div style="background:#fff;border:1px solid #E8E8E8;border-radius:10px;overflow:hidden">
+            <div style="padding:12px 16px;background:#F8F9FA;border-bottom:1px solid #E8E8E8;font-size:13px;font-weight:600">
+                Heartbeat History (last 10)
+            </div>
+            <div style="max-height:200px;overflow-y:auto">
+            @foreach (var hb in heartbeats)
+            {
+                <div style="padding:6px 16px;border-bottom:1px solid #F5F5F5;display:flex;justify-content:space-between;font-size:12px">
+                    <span style="color:#888;font-family:monospace">@hb.ReceivedAt.ToString("HH:mm:ss")</span>
+                    <span style="color:@(hb.Status=="ACTIVE"?"#3B6D11":"#A32D2D")">@hb.Status</span>
+                    <span style="color:#888">@(hb.DiskFreeGB.HasValue?hb.DiskFreeGB.Value.ToString("F0")+"GB":"—")</span>
+                    <span style="color:@(hb.PosProcessRunning?"#3B6D11":"#555")">POS:@(hb.PosProcessRunning?"ON":"OFF")</span>
+                </div>
+            }
+            @if (!heartbeats.Any()) {
+                <div style="padding:16px;text-align:center;color:#888;font-size:12px">No heartbeats recorded yet</div>
+            }
+            </div>
+        </div>
+    </div>
+
+    <!-- Right: Execute Steps -->
+    <div>
+        <div style="background:#fff;border:1px solid #E8E8E8;border-radius:10px;overflow:hidden">
+            <div style="padding:12px 16px;background:#F8F9FA;border-bottom:1px solid #E8E8E8;font-size:13px;font-weight:600;display:flex;justify-content:space-between;align-items:center">
+                <span>⚙ Execute Steps</span>
+                <span style="font-size:11px;color:#888;font-weight:400">Commands queue and execute within 60 seconds</span>
+            </div>
+            <div style="padding:16px">
+
+                <!-- Full sequence button -->
+                <div style="background:#F0F4FF;border:1px solid #C5D8F5;border-radius:8px;padding:14px 16px;margin-bottom:16px">
+                    <div style="font-weight:600;font-size:13px;color:#1F3864;margin-bottom:4px">🚀 Run Full FY-Close Sequence (All 4 Steps)</div>
+                    <div style="font-size:12px;color:#888;margin-bottom:12px">Queues Steps 1→2→3→4 in order. Terminal executes them sequentially.</div>
+                    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+                        <select id="fy-package-select" style="padding:7px 10px;border:1px solid #DDD;border-radius:6px;font-size:12px;flex:1;min-width:200px">
+                            <option value="">— Select FY DLL Package for Step 2 —</option>
+                            @foreach (var p in packages)
+                            {
+                                <option value="@p.PackageId" @(p.IsActive?"selected":"")>@p.PackageName (v@p.Version)</option>
+                            }
+                        </select>
+                        <button onclick="executeFullSequence('@Model.TerminalId')"
+                                style="padding:8px 20px;background:#1F3864;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap">
+                            ▶ Execute All Steps
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Individual step buttons -->
+                <div style="font-size:12px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">
+                    Or execute individual steps:
+                </div>
+
+                @{
+                    var steps = new (string Type, string Num, string Label, string Desc, string Color)[]
+                    {
+                        ("NsoSetup",    "1", "IT NSO Setup",        "Firewall off, RDP port 1010, IST timezone, .NET 3.5, SAP config, startup scripts",      "#185FA5"),
+                        ("FyClose",     "2", "FY-CLOSE.BAT",        "Kill POS.exe → Copy new DLLs to Extensions → Clear IsolatedStorage config cache",         "#3B6D11"),
+                        ("TimeSyncTest","3", "Time → Test Server",  "NET USE + net time to 192.168.144.131 (test NTP) — for test billing on new FY series",    "#854F0B"),
+                        ("TimeSyncProd","4", "Time → Prod Server",  "NET USE + net time to 192.168.144.158 (prod NTP) — go live with new series, unlock POS",  "#993556"),
+                    };
+                }
+
+                <div style="display:flex;flex-direction:column;gap:8px">
+                @foreach (var step in steps)
+                {
+                    <div style="border:1px solid #E8E8E8;border-radius:8px;padding:12px 14px;display:flex;align-items:center;gap:14px;background:#FAFAFA">
+                        <div style="width:32px;height:32px;border-radius:50%;background:@step.Color;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:14px;flex-shrink:0">@step.Num</div>
+                        <div style="flex:1">
+                            <div style="font-size:13px;font-weight:600;color:#1F3864">@step.Label</div>
+                            <div style="font-size:11px;color:#888;margin-top:2px">@step.Desc</div>
+                        </div>
+                        @if (step.Type == "FyClose")
+                        {
+                            <select id="pkg-select-@step.Type" style="padding:5px 8px;border:1px solid #DDD;border-radius:5px;font-size:11px;max-width:160px">
+                                <option value="">No package</option>
+                                @foreach (var p in packages)
+                                {
+                                    <option value="@p.PackageId" @(p.IsActive?"selected":"")>@p.PackageName</option>
+                                }
+                            </select>
+                        }
+                        <button onclick="executeStep('@Model.TerminalId','@step.Type')"
+                                id="btn-@step.Type"
+                                style="padding:6px 14px;background:@step.Color;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;flex-shrink:0;white-space:nowrap">
+                            ▶ Run Step @step.Num
+                        </button>
+                    </div>
+                }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Command execution log -->
+<div style="background:#fff;border:1px solid #E8E8E8;border-radius:10px;overflow:hidden">
+    <div style="padding:12px 16px;background:#F8F9FA;border-bottom:1px solid #E8E8E8;font-size:13px;font-weight:600;display:flex;justify-content:space-between;align-items:center">
+        <span>📋 Execution Log</span>
+        <button onclick="clearLog()" style="font-size:11px;padding:2px 8px;border:1px solid #DDD;border-radius:4px;background:#fff;cursor:pointer;color:#888">Clear</button>
+    </div>
+    <div id="exec-log" style="background:#0F0F0F;min-height:120px;max-height:320px;overflow-y:auto;padding:12px 16px;font-family:monospace;font-size:12px">
+        <div style="color:#555">// Execution log — dispatch a command above to see live output here</div>
+
+        @foreach (var cmd in Model.Commands)
+        {
+            var lastExec = cmd.Executions.OrderByDescending(e=>e.StartedAt).FirstOrDefault();
+            var logColor = cmd.Status == HO.Domain.Enums.CommandStatus.Success ? "#97C459"
+                         : cmd.Status == HO.Domain.Enums.CommandStatus.Failed  ? "#F09595"
+                         : "#FAC775";
+            <div style="margin-top:8px">
+                <div style="color:#378ADD">[@cmd.CreatedAt.ToString("HH:mm:ss")] @cmd.CommandType — <span style="color:@logColor">@cmd.Status</span>
+                @if (lastExec?.DurationMs.HasValue == true) { <span style="color:#888"> (@(lastExec.DurationMs/1000.0):F1)s)</span> }
+                </div>
+                @if (!string.IsNullOrEmpty(lastExec?.Stdout))
+                {
+                    foreach (var line in (lastExec.Stdout.Length > 500 ? lastExec.Stdout[^500..] : lastExec.Stdout).Split('\n').TakeLast(8))
+                    {
+                        <div style="color:#9FA8A3;padding-left:16px">@line</div>
+                    }
+                }
+                @if (!string.IsNullOrEmpty(lastExec?.Stderr))
+                {
+                    <div style="color:#F09595;padding-left:16px">ERR: @(lastExec.Stderr.Length > 200 ? lastExec.Stderr[^200..] : lastExec.Stderr)</div>
+                }
+            </div>
+        }
+    </div>
+</div>
+
+@section Scripts {
+<script>
+const terminalId = '@Model.TerminalId';
+let pollingIntervals = {};
+
+// ── PING ─────────────────────────────────────────────────────────────────────
+async function pingTerminal(tid) {
+    const btn = document.getElementById('ping-btn');
+    const status = document.getElementById('ping-status');
+    btn.textContent = '⟳ Pinging...'; btn.disabled = true;
+
+    try {
+        const token = document.querySelector('input[name="__RequestVerificationToken"]')?.value || '';
+        const resp = await fetch('/Terminal/Ping', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({ terminalId: tid, __RequestVerificationToken: token })
+        });
+        const d = await resp.json();
+
+        if (d.isOnline) {
+            status.style.background = '#EAF3DE'; status.style.color = '#3B6D11';
+            status.textContent = '● ONLINE';
+        } else {
+            status.style.background = '#FCEBEB'; status.style.color = '#A32D2D';
+            status.textContent = '● OFFLINE';
+        }
+
+        logLine('PING', d.message, d.isOnline ? '#97C459' : '#F09595');
+        if (d.isOnline) {
+            logLine('INFO', `IP: ${d.ipAddress} | Machine: ${d.machineName} | Agent: ${d.agentVersion} | Disk: ${d.diskFreeGB?.toFixed(1)}GB`, '#72D3A6');
+        }
+    } catch (e) {
+        logLine('ERROR', 'Ping request failed: ' + e.message, '#F09595');
+    }
+    btn.textContent = '🔍 Ping Terminal'; btn.disabled = false;
+}
+
+// ── EXECUTE SINGLE STEP ──────────────────────────────────────────────────────
+async function executeStep(tid, commandType) {
+    const btn = document.getElementById('btn-' + commandType);
+    if (!confirm(`Execute step "${commandType}" on terminal ${terminalId.substring(0,8)}...?`)) return;
+
+    btn.disabled = true; btn.textContent = '⟳ Queuing...';
+
+    const pkgSelect = document.getElementById('pkg-select-' + commandType);
+    const packageId = pkgSelect?.value || '';
+    const token = document.querySelector('input[name="__RequestVerificationToken"]')?.value || '';
+
+    try {
+        const resp = await fetch('/Terminal/ExecuteStep', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({ terminalId: tid, commandType, packageId, __RequestVerificationToken: token })
+        });
+        const d = await resp.json();
+
+        logLine('DISPATCH', d.message, d.success ? '#FAC775' : '#F09595');
+        if (d.success) pollCommandStatus(d.commandId);
+    } catch(e) {
+        logLine('ERROR', e.message, '#F09595');
+    }
+    btn.textContent = '✓ Queued'; setTimeout(() => { btn.textContent = '▶ Run Step'; btn.disabled = false; }, 3000);
+}
+
+// ── EXECUTE FULL SEQUENCE ────────────────────────────────────────────────────
+async function executeFullSequence(tid) {
+    const pkgId = document.getElementById('fy-package-select')?.value || '';
+    if (!confirm('Queue all 4 FY-close steps on this terminal?\n\nStep 1: NSO Setup\nStep 2: FY Close\nStep 3: Time→Test\nStep 4: Time→Prod')) return;
+
+    const token = document.querySelector('input[name="__RequestVerificationToken"]')?.value || '';
+
+    try {
+        const resp = await fetch('/Terminal/ExecuteFullSequence', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({ terminalId: tid, fyClosePackageId: pkgId, __RequestVerificationToken: token })
+        });
+        const d = await resp.json();
+        logLine('SEQUENCE', d.message, d.success ? '#97C459' : '#F09595');
+        if (d.success && d.commands) {
+            d.commands.forEach(c => {
+                logLine('STEP ' + c.step, `${c.name} — ID: ${c.commandId.substring(0,8)}...`, '#FAC775');
+                pollCommandStatus(c.commandId);
+            });
+        }
+    } catch(e) {
+        logLine('ERROR', e.message, '#F09595');
+    }
+}
+
+// ── POLL COMMAND STATUS ──────────────────────────────────────────────────────
+function pollCommandStatus(commandId) {
+    let attempts = 0;
+    const shortId = commandId.substring(0,8) + '...';
+    const iv = setInterval(async () => {
+        attempts++;
+        if (attempts > 60) { clearInterval(iv); logLine('TIMEOUT', shortId + ' poll timeout', '#F09595'); return; }
+
+        try {
+            const r = await fetch('/Terminal/CommandStatus?commandId=' + commandId);
+            const d = await r.json();
+            if (!d.found) return;
+
+            if (d.status === 'Dispatched') logLine('ACK',     shortId + ' → Agent received command', '#FAC775');
+            if (d.status === 'Running')    logLine('RUNNING', shortId + ' → Executing script...', '#FAC775');
+
+            if (d.status === 'Success') {
+                clearInterval(iv);
+                logLine('SUCCESS', shortId + ` ✓ Exit code 0 — ${(d.durationMs/1000).toFixed(1)}s`, '#97C459');
+                if (d.stdout) d.stdout.split('\n').slice(-6).forEach(l => logLine('OUT', l, '#9FA8A3'));
+            }
+            if (d.status === 'Failed') {
+                clearInterval(iv);
+                logLine('FAILED', shortId + ` ✗ Exit code ${d.exitCode}`, '#F09595');
+                if (d.stderr) logLine('ERR', d.stderr.substring(0,200), '#F09595');
+            }
+        } catch(e) {}
+    }, 3000);
+    pollingIntervals[commandId] = iv;
+}
+
+// ── LOG HELPER ───────────────────────────────────────────────────────────────
+function logLine(tag, message, color = '#9FA8A3') {
+    const log = document.getElementById('exec-log');
+    const t = new Date().toLocaleTimeString();
+    const div = document.createElement('div');
+    div.style.cssText = `color:${color};margin-top:3px`;
+    div.innerHTML = `<span style='color:#555'>[${t}]</span> <span style='color:#378ADD;min-width:80px;display:inline-block'>${tag}</span> ${message.replace(/</g,'&lt;')}`;
+    log.appendChild(div);
+    log.scrollTop = log.scrollHeight;
+}
+
+function clearLog() {
+    document.getElementById('exec-log').innerHTML = '<div style="color:#555">// Log cleared</div>';
+}
+
+// Auto-ping on page load
+window.addEventListener('load', () => pingTerminal(terminalId));
+</script>
+@Html.AntiForgeryToken()
+}
