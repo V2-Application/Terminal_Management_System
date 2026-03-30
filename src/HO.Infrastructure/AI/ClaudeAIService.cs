@@ -1,234 +1,260 @@
-using Anthropic.SDK;
-using Anthropic.SDK.Constants;
-using Anthropic.SDK.Messaging;
 using HO.Application.AI;
 using Microsoft.Extensions.Logging;
+using System.Net.Http.Headers;
+using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace HO.Infrastructure.AI;
 
 /// <summary>
-/// Anthropic Claude AI integration for RetailTMS.
-/// Uses Claude claude-sonnet-4-6 for intelligent failure diagnosis, batch summarization,
-/// and retry recommendations for year-end close operations.
+/// Anthropic Claude AI integration using raw HttpClient (no SDK dependency).
+/// Calls the Anthropic Messages API directly — works with any .NET 8 project
+/// without requiring any additional NuGet packages.
 ///
-/// Setup: Add ANTHROPIC_API_KEY to environment variables or appsettings.json.
+/// API Reference: https://docs.anthropic.com/en/api/messages
+/// Model: claude-sonnet-4-6 (fast, cost-effective, excellent for log analysis)
 /// </summary>
 public class ClaudeAIService : IClaudeAIService
 {
-    private readonly AnthropicClient _client;
+    private readonly HttpClient _http;
+    private readonly string _apiKey;
     private readonly ILogger<ClaudeAIService> _logger;
 
-    // System prompt — gives Claude context about RetailTMS
+    private const string ApiUrl    = "https://api.anthropic.com/v1/messages";
+    private const string Model     = "claude-sonnet-4-6";
+    private const string ApiVersion = "2023-06-01";
+
+    // System prompt — RetailTMS context for Claude
     private const string SystemPrompt = """
         You are an expert IT operations assistant for a retail chain's centralized
-        Terminal Management System (RetailTMS). Your role is to help IT staff at Head Office
-        diagnose failures, understand system status, and make smart decisions during the
-        31st March financial year-end close process.
+        Terminal Management System (RetailTMS). Help IT staff at Head Office
+        diagnose failures and make smart decisions during the 31st March
+        financial year-end close process.
 
-        The system manages 500+ store POS terminals running Microsoft Dynamics AX 2012 R3 Retail POS.
-        Year-end close involves: deploying updated DLLs, clearing config cache, syncing clocks.
+        The system manages 500+ store POS terminals (Microsoft Dynamics AX 2012 R3).
+        Year-end close: deploy updated DLLs, clear IsolatedStorage config cache, sync clocks.
 
-        The batch files involved are:
-        - IT_NSO_BATCH.BAT: New store setup (firewall, RDP, timezone, .NET 3.5, SAP config)
-        - FY-CLOSE.BAT: Kill POS, copy new DLLs to Extensions folder, clear IsolatedStorage
-        - Time_set_before_Test_Bil.bat: Sync clock to TEST server (192.168.144.131)
-        - Time_set_After_Billing.bat: Sync clock to PROD server (192.168.144.158)
+        Batch files: FY-CLOSE.BAT (kill POS → copy DLLs → clear cache),
+        Time_set_before_Test_Bil.bat (sync to test NTP), Time_set_After_Billing.bat (sync to prod NTP).
 
-        Common failure causes:
-        - Exit code 5: Access denied (antivirus blocking DLL copy)
-        - Exit code 2: File not found (wrong path or missing DLLs on HO server)
-        - Exit code 1: General script error
-        - NET USE failures: Network connectivity or credential issues
-        - taskkill failures: POS process hung or locked by another process
-
-        Always give practical, actionable advice. Be concise. Use plain English.
+        Common exit codes: 5=Access denied (AV blocking), 2=File not found, 1=General error.
+        NET USE failures = network/credential issues. taskkill failures = POS hung.
+        Always give concise, actionable advice.
         """;
 
-    public ClaudeAIService(AnthropicClient client, ILogger<ClaudeAIService> logger)
+    public ClaudeAIService(HttpClient http, string apiKey, ILogger<ClaudeAIService> logger)
     {
-        _client = client;
+        _http   = http;
+        _apiKey = apiKey;
         _logger = logger;
     }
 
-    /// <inheritdoc/>
+    // ─── IClaudeAIService ────────────────────────────────────────────────────
+
     public async Task<FailureDiagnosisResult> DiagnoseFailureAsync(
         string commandType, string storeCode, int exitCode,
         string stdout, string stderr, CancellationToken ct = default)
     {
-        _logger.LogInformation("Claude AI: Diagnosing failure for store {Store}, command {Type}, exit {Exit}",
-            storeCode, commandType, exitCode);
+        _logger.LogInformation("Claude AI: Diagnosing {Type} failure at {Store} (exit={Exit})",
+            commandType, storeCode, exitCode);
 
         var prompt = $"""
-            A RetailTMS command FAILED. Please diagnose the root cause and recommend an action.
+            A RetailTMS command FAILED. Diagnose it.
 
             Store: {storeCode}
-            Command Type: {commandType}
+            Command: {commandType}
             Exit Code: {exitCode}
 
-            STDOUT:
-            {TruncateLog(stdout, 2000)}
+            STDOUT (last 2000 chars):
+            {Truncate(stdout, 2000)}
 
-            STDERR:
-            {TruncateLog(stderr, 2000)}
+            STDERR (last 2000 chars):
+            {Truncate(stderr, 2000)}
 
-            Respond in this exact JSON format (no markdown, just JSON):
+            Respond ONLY with valid JSON — no markdown, no explanation outside JSON:
             {{
-              "rootCause": "Brief description of what went wrong",
-              "recommendedAction": "Specific step to fix this",
-              "actionType": "RETRY|ROLLBACK|MANUAL|IGNORE",
-              "isSafeToRetry": true|false,
-              "explanation": "Detailed explanation for the IT team"
+              "rootCause": "one sentence describing what went wrong",
+              "recommendedAction": "specific step to fix this",
+              "actionType": "RETRY",
+              "isSafeToRetry": true,
+              "explanation": "detailed explanation for IT team"
             }}
+            actionType must be one of: RETRY, ROLLBACK, MANUAL, IGNORE
             """;
 
         try
         {
-            var response = await CallClaudeAsync(prompt, maxTokens: 500, ct);
-            var json = ExtractJson(response);
-            var result = JsonSerializer.Deserialize<FailureDiagnosisResult>(json,
-                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-
+            var raw = await CallAsync(prompt, maxTokens: 500, ct);
+            var result = ParseJson<FailureDiagnosisResult>(raw);
             return result ?? FallbackDiagnosis(exitCode, stderr);
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Claude AI diagnosis failed — using fallback");
+            _logger.LogWarning(ex, "AI diagnosis failed — using fallback");
             return FallbackDiagnosis(exitCode, stderr);
         }
     }
 
-    /// <inheritdoc/>
     public async Task<string> SummarizeBatchStatusAsync(
         int total, int completed, int failed, int offline, int pending,
         List<string> failedStoreNames, CancellationToken ct = default)
     {
-        var failedList = failedStoreNames.Any()
+        var failList = failedStoreNames.Any()
             ? string.Join(", ", failedStoreNames.Take(10))
             : "none";
 
         var prompt = $"""
-            Summarize this RetailTMS FY-Close batch status for the Head Office management team.
-            Write 2-3 plain English sentences. Be direct and factual.
+            Summarize this RetailTMS FY-Close batch for management. Write 2-3 sentences, plain English, no bullets.
 
-            Batch Stats:
-            - Total stores: {total}
-            - Completed: {completed} ({(total > 0 ? completed * 100 / total : 0)}%)
-            - Failed: {failed}
-            - Offline (pending reconnect): {offline}
-            - Still pending: {pending}
-            - Failed stores: {failedList}
+            Total: {total} | Completed: {completed} ({(total > 0 ? completed * 100 / total : 0)}%)
+            Failed: {failed} | Offline: {offline} | Pending: {pending}
+            Failed stores: {failList}
 
-            Mention if action is needed and what. Do not use bullet points.
+            Mention if action needed and what.
             """;
 
-        return await CallClaudeAsync(prompt, maxTokens: 200, ct);
+        try { return await CallAsync(prompt, maxTokens: 150, ct); }
+        catch { return $"{completed}/{total} completed. Failed: {failed}. Offline: {offline}."; }
     }
 
-    /// <inheritdoc/>
     public async Task<string> AskAsync(string question, string context, CancellationToken ct = default)
     {
         var prompt = $"""
-            Context about current system state:
+            System context:
             {context}
 
-            Question from HO Operator: {question}
+            Operator question: {question}
 
-            Answer concisely and practically. Max 3 sentences.
+            Answer in max 3 sentences, practically and concisely.
             """;
 
-        return await CallClaudeAsync(prompt, maxTokens: 300, ct);
+        try { return await CallAsync(prompt, maxTokens: 250, ct); }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "AI chat failed");
+            return "AI assistant temporarily unavailable. Please check logs.";
+        }
     }
 
-    /// <inheritdoc/>
     public async Task<RetryRecommendation> RecommendRetryActionAsync(
         string storeCode, string commandType, int exitCode,
         string errorOutput, int retryCount, CancellationToken ct = default)
     {
         var prompt = $"""
-            A RetailTMS store command has failed. Recommend the best action.
+            RetailTMS command failed. Recommend next action.
 
-            Store: {storeCode}
-            Command: {commandType}
-            Exit Code: {exitCode}
-            Retry Count: {retryCount}/3
-            Error: {TruncateLog(errorOutput, 500)}
+            Store: {storeCode} | Command: {commandType} | Exit: {exitCode} | Retries: {retryCount}/3
+            Error: {Truncate(errorOutput, 400)}
 
-            Respond in this exact JSON (no markdown):
+            Respond ONLY with JSON:
             {{
-              "action": "RETRY|ROLLBACK|MANUAL_INTERVENTION",
-              "reason": "Why this action is recommended",
+              "action": "RETRY",
+              "reason": "why this action",
               "suggestedDelayMinutes": 5,
-              "checklistBeforeRetry": ["item1", "item2"]
+              "checklistBeforeRetry": ["check 1", "check 2"]
             }}
+            action must be: RETRY, ROLLBACK, or MANUAL_INTERVENTION
             """;
 
         try
         {
-            var response = await CallClaudeAsync(prompt, maxTokens: 300, ct);
-            var json = ExtractJson(response);
-            return JsonSerializer.Deserialize<RetryRecommendation>(json,
-                new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
-                ?? DefaultRetryRecommendation(retryCount);
+            var raw = await CallAsync(prompt, maxTokens: 300, ct);
+            return ParseJson<RetryRecommendation>(raw) ?? DefaultRetry(retryCount);
         }
-        catch
-        {
-            return DefaultRetryRecommendation(retryCount);
-        }
+        catch { return DefaultRetry(retryCount); }
     }
 
-    // ─── Private helpers ────────────────────────────────────────────────────
+    // ─── Raw HTTP call to Anthropic API ─────────────────────────────────────
 
-    private async Task<string> CallClaudeAsync(string userPrompt, int maxTokens, CancellationToken ct)
+    private async Task<string> CallAsync(string userPrompt, int maxTokens, CancellationToken ct)
     {
-        var request = new MessageParameters
+        var body = new
         {
-            Model = AnthropicModels.Claude35Sonnet,
-            MaxTokens = maxTokens,
-            System = new List<SystemMessage> { new SystemMessage(SystemPrompt) },
-            Messages = new List<Message>
+            model  = Model,
+            max_tokens = maxTokens,
+            system = SystemPrompt,
+            messages = new[]
             {
-                new Message(RoleType.User, userPrompt)
+                new { role = "user", content = userPrompt }
             }
         };
 
-        var response = await _client.Messages.GetClaudeMessageAsync(request, ct);
-        return response.Content.OfType<TextContent>().FirstOrDefault()?.Text ?? string.Empty;
+        var json    = JsonSerializer.Serialize(body);
+        var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, ApiUrl)
+        {
+            Content = content
+        };
+        request.Headers.Add("x-api-key", _apiKey);
+        request.Headers.Add("anthropic-version", ApiVersion);
+
+        var response = await _http.SendAsync(request, ct);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var err = await response.Content.ReadAsStringAsync(ct);
+            _logger.LogError("Anthropic API error {Status}: {Body}", response.StatusCode, err);
+            throw new HttpRequestException($"Anthropic API returned {response.StatusCode}");
+        }
+
+        var responseJson = await response.Content.ReadAsStringAsync(ct);
+        using var doc = JsonDocument.Parse(responseJson);
+
+        // Response shape: { content: [ { type: "text", text: "..." } ] }
+        var text = doc.RootElement
+            .GetProperty("content")[0]
+            .GetProperty("text")
+            .GetString() ?? string.Empty;
+
+        _logger.LogDebug("Claude response ({Tokens} tokens): {Preview}",
+            maxTokens, text[..Math.Min(100, text.Length)]);
+
+        return text;
     }
 
-    private static string TruncateLog(string log, int maxLen)
+    // ─── Helpers ─────────────────────────────────────────────────────────────
+
+    private static T? ParseJson<T>(string text) where T : class
     {
-        if (string.IsNullOrEmpty(log)) return "(empty)";
-        return log.Length <= maxLen ? log : "..." + log[^maxLen..];
+        try
+        {
+            // Extract JSON block if wrapped in markdown or other text
+            var start = text.IndexOf('{');
+            var end   = text.LastIndexOf('}');
+            if (start < 0 || end <= start) return null;
+            var jsonOnly = text[start..(end + 1)];
+            return JsonSerializer.Deserialize<T>(jsonOnly,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        }
+        catch { return null; }
     }
 
-    private static string ExtractJson(string text)
+    private static string Truncate(string? s, int max)
     {
-        var start = text.IndexOf('{');
-        var end = text.LastIndexOf('}');
-        return start >= 0 && end > start ? text[start..(end + 1)] : text;
+        if (string.IsNullOrEmpty(s)) return "(empty)";
+        return s.Length <= max ? s : "..." + s[^max..];
     }
 
     private static FailureDiagnosisResult FallbackDiagnosis(int exitCode, string stderr) => new()
     {
-        RootCause = exitCode == 5 ? "Access denied — likely blocked by antivirus"
-                  : exitCode == 2 ? "File not found — check DLL package path on HO server"
-                  : $"Script failed with exit code {exitCode}",
-        RecommendedAction = exitCode == 5 ? "Temporarily disable antivirus at store, then retry"
-                          : exitCode == 2 ? "Verify package file exists on HO server, re-upload if needed"
-                          : "Check full error log and contact IT support",
-        ActionType = exitCode == 5 || exitCode == 2 ? "RETRY" : "MANUAL",
+        RootCause         = exitCode == 5 ? "Access denied — antivirus may be blocking DLL copy"
+                          : exitCode == 2 ? "File not found — DLL package path incorrect on HO server"
+                          : $"Script failed with exit code {exitCode}",
+        RecommendedAction = exitCode == 5 ? "Temporarily disable AV at store, then retry"
+                          : exitCode == 2 ? "Re-upload DLL package to HO server and retry"
+                          : "Review full error log and contact IT support",
+        ActionType   = exitCode is 5 or 2 ? "RETRY" : "MANUAL",
         IsSafeToRetry = exitCode is 5 or 2,
-        Explanation = $"Automated diagnosis (Claude AI unavailable). Exit code: {exitCode}. Stderr: {TruncateLog(stderr, 200)}"
+        Explanation  = $"[Fallback — Claude AI unavailable] Exit={exitCode}. Stderr: {Truncate(stderr, 200)}"
     };
 
-    private static RetryRecommendation DefaultRetryRecommendation(int retryCount) => new()
+    private static RetryRecommendation DefaultRetry(int retryCount) => new()
     {
-        Action = retryCount >= 3 ? "MANUAL_INTERVENTION" : "RETRY",
-        Reason = retryCount >= 3
-            ? "Maximum auto-retries reached. Manual investigation required."
-            : "Transient failure — retry may succeed.",
+        Action               = retryCount >= 3 ? "MANUAL_INTERVENTION" : "RETRY",
+        Reason               = retryCount >= 3 ? "Max retries reached — manual fix needed" : "Retry may succeed",
         SuggestedDelayMinutes = retryCount * 5,
-        ChecklistBeforeRetry = new[] { "Verify store network connectivity", "Check HO file server availability" }
+        ChecklistBeforeRetry = new[] { "Check store network", "Check HO file server" }
     };
 }

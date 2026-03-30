@@ -1,88 +1,103 @@
 using HO.Contracts.Requests;
 using HO.Contracts.Responses;
+using Microsoft.Extensions.Logging;
 using Store.Agent.Models;
-using Store.Agent.Execution;
-using System.Net.Http.Json;
+using Store.Agent.Services;   // LocalStateRepository
+using System.Net.Http.Json;   // PostAsJsonAsync, GetFromJsonAsync
 
 namespace Store.Agent.Services;
 
 /// <summary>
-/// Core polling service — runs on background timer every PollIntervalSeconds.
-/// Calls GET /api/v1/commands/pending, processes each received command sequentially.
+/// Polls HO API every PollIntervalSeconds for pending commands.
+/// Processes commands sequentially (MaxConcurrentCommands = 1).
+/// Idempotent: checks local SQLite nonce cache before executing.
 /// </summary>
 public class CommandPollerService
 {
-    private readonly HttpClient _httpClient;
+    private readonly IHttpClientFactory _httpFactory;
     private readonly AgentConfig _config;
     private readonly ExecutionService _executionService;
     private readonly LocalStateRepository _localState;
     private readonly ILogger<CommandPollerService> _logger;
 
     public CommandPollerService(
-        HttpClient httpClient,
+        IHttpClientFactory httpFactory,
         AgentConfig config,
         ExecutionService executionService,
         LocalStateRepository localState,
         ILogger<CommandPollerService> logger)
     {
-        _httpClient = httpClient;
-        _config = config;
+        _httpFactory      = httpFactory;
+        _config           = config;
         _executionService = executionService;
-        _localState = localState;
-        _logger = logger;
+        _localState       = localState;
+        _logger           = logger;
     }
 
     public async Task PollAsync(Guid terminalId, CancellationToken ct)
     {
         try
         {
-            _logger.LogDebug("Polling for commands. TerminalId={TerminalId}", terminalId);
+            var http = _httpFactory.CreateClient("HoApi");
 
-            var response = await _httpClient.GetFromJsonAsync<PendingCommandsResponse>(
+            var response = await http.GetFromJsonAsync<PendingCommandsResponse>(
                 $"commands/pending?terminalId={terminalId}", ct);
 
-            if (response?.Commands == null || !response.Commands.Any())
+            if (response?.Commands == null || response.Commands.Count == 0)
             {
-                _logger.LogDebug("No pending commands.");
+                _logger.LogDebug("No pending commands for terminal {Id}", terminalId);
                 return;
             }
 
-            _logger.LogInformation("Received {Count} pending command(s)", response.Commands.Count);
+            _logger.LogInformation("Received {N} pending command(s)", response.Commands.Count);
 
             foreach (var cmd in response.Commands)
             {
                 ct.ThrowIfCancellationRequested();
 
-                // Idempotency: check if already executed
+                // Idempotency guard — skip if nonce already executed locally
                 if (await _localState.IsAlreadyExecutedAsync(cmd.CommandNonce))
                 {
-                    _logger.LogWarning("Skipping duplicate command {CommandId} (nonce already executed)", cmd.CommandId);
-                    // Still send ACK so server knows we have it
-                    await AcknowledgeAsync(cmd.CommandId, terminalId, ct);
+                    _logger.LogWarning(
+                        "Skipping command {CmdId} — nonce {Nonce} already executed locally",
+                        cmd.CommandId, cmd.CommandNonce);
+                    await AcknowledgeAsync(http, cmd.CommandId, terminalId, ct);
                     continue;
                 }
 
-                await AcknowledgeAsync(cmd.CommandId, terminalId, ct);
+                await AcknowledgeAsync(http, cmd.CommandId, terminalId, ct);
                 await _executionService.ExecuteAsync(cmd, terminalId, ct);
             }
         }
         catch (OperationCanceledException) { throw; }
+        catch (HttpRequestException ex)
+        {
+            _logger.LogWarning(ex, "HTTP error during poll — will retry next interval");
+        }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error during command poll");
+            _logger.LogError(ex, "Unexpected error during poll");
         }
     }
 
-    private async Task AcknowledgeAsync(Guid commandId, Guid terminalId, CancellationToken ct)
+    private async Task AcknowledgeAsync(
+        HttpClient http, Guid commandId, Guid terminalId, CancellationToken ct)
     {
         try
         {
-            await _httpClient.PostAsJsonAsync($"commands/{commandId}/ack",
-                new CommandAckRequest { CommandId = commandId, TerminalId = terminalId, ReceivedAt = DateTime.UtcNow }, ct);
+            await http.PostAsJsonAsync($"commands/{commandId}/ack",
+                new CommandAckRequest
+                {
+                    CommandId  = commandId,
+                    TerminalId = terminalId,
+                    ReceivedAt = DateTime.UtcNow
+                }, ct);
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to ACK command {CommandId} — will retry on reconnect", commandId);
+            _logger.LogWarning(ex,
+                "Failed to ACK command {CmdId} — HO will re-queue it if not ACKed within TTL",
+                commandId);
         }
     }
 }

@@ -1,52 +1,81 @@
 using HO.Contracts.Requests;
+using Microsoft.Extensions.Logging;
 using Store.Agent.Models;
-using System.Net.Http.Json;
+using System.Net.Http.Json;   // PostAsJsonAsync
 
 namespace Store.Agent.Services;
 
 /// <summary>
 /// Sends heartbeat to HO API every HeartbeatIntervalSeconds.
-/// Includes disk space, POS process status, agent version.
+/// Heartbeat includes: disk space, POS process status, agent version.
+/// If heartbeat fails, the agent continues running — HO will mark it offline after threshold.
 /// </summary>
 public class HeartbeatService
 {
-    private readonly HttpClient _httpClient;
+    private readonly IHttpClientFactory _httpFactory;
     private readonly AgentConfig _config;
     private readonly ILogger<HeartbeatService> _logger;
 
-    public HeartbeatService(HttpClient httpClient, AgentConfig config, ILogger<HeartbeatService> logger)
+    public HeartbeatService(
+        IHttpClientFactory httpFactory,
+        AgentConfig config,
+        ILogger<HeartbeatService> logger)
     {
-        _httpClient = httpClient;
-        _config = config;
-        _logger = logger;
+        _httpFactory = httpFactory;
+        _config      = config;
+        _logger      = logger;
     }
 
     public async Task SendAsync(Guid terminalId, CancellationToken ct)
     {
         try
         {
-            var posRunning = System.Diagnostics.Process.GetProcessesByName("POS").Length > 0;
-            var drive = new DriveInfo(Path.GetPathRoot(_config.PosExtensionsPath) ?? "C:");
-            var diskFreeGB = (decimal)(drive.AvailableFreeSpace / (1024.0 * 1024 * 1024));
+            var posRunning  = IsPosRunning();
+            var diskFreeGB  = GetDiskFreeGB();
+            var agentVersion = GetVersion();
 
-            await _httpClient.PostAsJsonAsync("heartbeat", new HeartbeatRequest
+            var http = _httpFactory.CreateClient("HoApi");
+
+            await http.PostAsJsonAsync("heartbeat", new HeartbeatRequest
             {
-                TerminalId = terminalId,
-                Status = "ACTIVE",
-                DiskFreeGB = diskFreeGB,
+                TerminalId       = terminalId,
+                Status           = "ACTIVE",
+                DiskFreeGB       = diskFreeGB,
                 PosProcessRunning = posRunning,
-                AgentVersion = GetAgentVersion(),
-                LocalTime = DateTime.Now
+                AgentVersion     = agentVersion,
+                LocalTime        = DateTime.Now
             }, ct);
 
-            _logger.LogDebug("Heartbeat sent. Disk:{Disk:F1}GB POS:{PosRunning}", diskFreeGB, posRunning);
+            _logger.LogDebug(
+                "Heartbeat sent. Disk={Disk:F1}GB POS={PosRunning} v{Version}",
+                diskFreeGB, posRunning, agentVersion);
         }
+        catch (OperationCanceledException) { throw; }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Heartbeat failed — will retry next interval");
+            _logger.LogWarning(ex, "Heartbeat failed — will retry next interval (HO marks offline after 10 min)");
         }
     }
 
-    private static string GetAgentVersion()
-        => System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "1.0.0";
+    private static bool IsPosRunning()
+    {
+        try { return System.Diagnostics.Process.GetProcessesByName("POS").Length > 0; }
+        catch { return false; }
+    }
+
+    private decimal GetDiskFreeGB()
+    {
+        try
+        {
+            var root  = Path.GetPathRoot(_config.PosExtensionsPath) ?? "C:";
+            var drive = new DriveInfo(root);
+            return (decimal)(drive.AvailableFreeSpace / (1024.0 * 1024 * 1024));
+        }
+        catch { return 0m; }
+    }
+
+    private static string GetVersion()
+        => System.Reflection.Assembly
+            .GetExecutingAssembly()
+            .GetName().Version?.ToString(3) ?? "1.0.0";
 }
