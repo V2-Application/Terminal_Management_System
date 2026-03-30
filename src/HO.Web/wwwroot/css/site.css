@@ -1,31 +1,72 @@
-/* RetailTMS — Head Office Dashboard Styles */
+/* RetailTMS — Site Styles */
 
 body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     font-size: 14px;
-    background: #F8F9FA;
-    color: #212529;
 }
 
-.nav-link { font-size: 13px; transition: background .1s; border-left: 2px solid transparent !important; }
-.nav-link:hover { background: #F0F4FF; }
+/* ── Sidebar nav hover ── */
+nav a:hover { background: #F0F4FF !important; color: #185FA5 !important; }
 
+/* ── Cards ── */
 .card { border: 0.5px solid #E0E0E0; border-radius: 10px; }
-.card-header { background: #F8F9FA; border-bottom: 0.5px solid #E0E0E0; font-size: 13px; font-weight: 500; }
+.card-header {
+    background: #F8F9FA;
+    border-bottom: 0.5px solid #E0E0E0;
+    font-size: 13px;
+    font-weight: 500;
+    border-radius: 10px 10px 0 0 !important;
+}
 
-.table th { font-size: 11px; font-weight: 500; color: #6C757D; text-transform: uppercase; letter-spacing: .04em; }
+/* ── Tables ── */
+.table th {
+    font-size: 11px;
+    font-weight: 600;
+    color: #6C757D;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    border-bottom-width: 1px;
+}
 .table td { font-size: 13px; vertical-align: middle; }
-.table-hover tbody tr:hover { background: #F0F4FF; cursor: pointer; }
+.table-hover tbody tr { cursor: pointer; }
+.table-hover tbody tr:hover { background-color: #F0F4FF !important; }
 
-.status-badge { padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 500; display: inline-flex; align-items: center; gap: 4px; }
+/* ── Status badges ── */
+.status-badge {
+    padding: 3px 9px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap;
+}
 .status-completed { background: #EAF3DE; color: #3B6D11; }
 .status-running   { background: #FAEEDA; color: #854F0B; }
 .status-failed    { background: #FCEBEB; color: #A32D2D; }
 .status-offline   { background: #F1EFE8; color: #5F5E5A; }
 .status-pending   { background: #F0F0F0; color: #6C757D; }
+.status-skipped   { background: #E8F4FD; color: #1A5276; }
 
-.log-viewer { background: #0F0F0F; color: #9FA8A3; font-family: 'Courier New', monospace; font-size: 12px; padding: 12px; border-radius: 6px; max-height: 300px; overflow-y: auto; }
+/* ── Log viewer ── */
+.log-viewer {
+    background: #0F0F0F;
+    color: #9FA8A3;
+    font-family: 'Consolas', 'Courier New', monospace;
+    font-size: 12px;
+    padding: 12px 16px;
+    border-radius: 6px;
+    max-height: 350px;
+    overflow-y: auto;
+}
 .log-success { color: #97C459; }
 .log-error   { color: #F09595; }
 .log-warn    { color: #FAC775; }
 .log-info    { color: #72D3A6; }
+
+/* ── Progress bars ── */
+.progress { border-radius: 4px; }
+
+/* ── Monospace numbers ── */
+.font-mono { font-family: 'Consolas', 'Courier New', monospace; }

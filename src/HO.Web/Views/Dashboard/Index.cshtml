@@ -1,35 +1,39 @@
 @model HO.Application.DTOs.DashboardSummaryDto
 @{
     ViewData["Title"] = "Live Dashboard";
+
+    var kpis = new[]
+    {
+        new { Label="Total Stores",  Id="kpi-total",     Val=Model.TotalStores.ToString(), Bg="#F8F9FA", Color="#212529" },
+        new { Label="Completed",     Id="kpi-completed", Val=Model.Completed.ToString(),   Bg="#EAF3DE", Color="#3B6D11" },
+        new { Label="Running",       Id="kpi-running",   Val=Model.Running.ToString(),     Bg="#FAEEDA", Color="#854F0B" },
+        new { Label="Pending",       Id="kpi-pending",   Val=Model.Pending.ToString(),     Bg="#F8F9FA", Color="#6C757D" },
+        new { Label="Failed",        Id="kpi-failed",    Val=Model.Failed.ToString(),      Bg="#FCEBEB", Color="#A32D2D" },
+        new { Label="Offline",       Id="kpi-offline",   Val=Model.Offline.ToString(),     Bg="#F1EFE8", Color="#5F5E5A" },
+    };
 }
 
 <div class="d-flex justify-content-between align-items-center mb-3">
-    <div></div>
+    <span></span>
     <div>
         <span id="live-indicator" class="badge bg-success me-2" style="font-size:11px">● Live</span>
-        <span class="text-muted" style="font-size:11px" id="last-updated">Connecting...</span>
+        <span id="last-updated" class="text-muted" style="font-size:11px">Connecting...</span>
     </div>
 </div>
 
-<!-- KPI cards -->
+<!-- KPI Cards row -->
 <div class="row g-3 mb-4">
-    @{
-        void KPI(string label, string id, string val, string bg, string color) {
-            <div class="col-md-2">
-                <div style="background:@bg;border-radius:8px;padding:12px;text-align:center">
-                    <div class="text-muted" style="font-size:11px">@label</div>
-                    <div id="@id" style="font-size:28px;font-weight:600;color:@color;
-                         font-family:monospace;line-height:1.2">@val</div>
+    @foreach (var k in kpis)
+    {
+        <div class="col-md-2 col-sm-4 col-6">
+            <div style="background:@k.Bg;border-radius:8px;padding:14px 10px;text-align:center;border:0.5px solid #E8E8E8">
+                <div class="text-muted" style="font-size:11px;margin-bottom:4px">@k.Label</div>
+                <div id="@k.Id" style="font-size:28px;font-weight:600;color:@k.Color;font-family:monospace;line-height:1.1">
+                    @k.Val
                 </div>
-            </div>;
-        }
+            </div>
+        </div>
     }
-    @{ KPI("Total Stores",  "kpi-total",     Model.TotalStores.ToString(), "#F8F9FA", "#212529"); }
-    @{ KPI("Completed",     "kpi-completed", Model.Completed.ToString(),   "#EAF3DE", "#3B6D11"); }
-    @{ KPI("Running",       "kpi-running",   Model.Running.ToString(),     "#FAEEDA", "#854F0B"); }
-    @{ KPI("Pending",       "kpi-pending",   Model.Pending.ToString(),     "#F8F9FA", "#6C757D"); }
-    @{ KPI("Failed",        "kpi-failed",    Model.Failed.ToString(),      "#FCEBEB", "#A32D2D"); }
-    @{ KPI("Offline",       "kpi-offline",   Model.Offline.ToString(),     "#F1EFE8", "#5F5E5A"); }
 </div>
 
 @if (Model.ActiveFYJobId != null)
@@ -37,43 +41,37 @@
     <div class="card mb-3">
         <div class="card-body py-2">
             <div class="d-flex justify-content-between align-items-center mb-2">
-                <span class="fw-semibold" style="font-size:13px">
-                    Batch @Model.ActiveFYYear — Overall Progress
-                </span>
-                <span class="text-muted" style="font-size:12px;font-family:monospace"
-                      id="progress-label">
+                <span class="fw-semibold" style="font-size:13px">Batch @Model.ActiveFYYear — Progress</span>
+                <span id="progress-label" class="text-muted" style="font-size:12px;font-family:monospace">
                     @Model.Completed / @Model.TotalStores stores
                 </span>
             </div>
             <div class="progress" style="height:8px">
                 <div class="progress-bar bg-success" id="overall-progress"
-                     role="progressbar"
-                     style="width:@Model.CompletionPct%;transition:width .5s ease"></div>
+                     role="progressbar" style="width:@Model.CompletionPct%;transition:width .5s"></div>
             </div>
         </div>
     </div>
 }
 
-<!-- Filters -->
+<!-- Filter buttons -->
 <div class="d-flex gap-2 mb-3 flex-wrap">
-    @foreach (var s in new[]{"","Pending","Running","Success","Failed","Offline"})
-    {
-        <button class="btn btn-sm btn-outline-secondary filter-status-btn"
-                data-status="@s" style="font-size:12px">
-            @(string.IsNullOrEmpty(s)?"All":s)
-        </button>
-    }
+    <button class="btn btn-sm btn-primary filter-status-btn" data-status="">All</button>
+    <button class="btn btn-sm btn-outline-secondary filter-status-btn" data-status="Pending">Pending</button>
+    <button class="btn btn-sm btn-outline-secondary filter-status-btn" data-status="Running">Running</button>
+    <button class="btn btn-sm btn-outline-secondary filter-status-btn" data-status="Success">Completed</button>
+    <button class="btn btn-sm btn-outline-secondary filter-status-btn" data-status="Failed">Failed</button>
+    <button class="btn btn-sm btn-outline-secondary filter-status-btn" data-status="Offline">Offline</button>
     <div class="vr mx-1"></div>
-    @foreach (var r in new[]{"","North","South","East","West","Central"})
-    {
-        <button class="btn btn-sm btn-outline-secondary filter-region-btn"
-                data-region="@r" style="font-size:12px">
-            @(string.IsNullOrEmpty(r)?"All regions":r)
-        </button>
-    }
+    <button class="btn btn-sm btn-outline-secondary filter-region-btn" data-region="">All regions</button>
+    <button class="btn btn-sm btn-outline-secondary filter-region-btn" data-region="North">North</button>
+    <button class="btn btn-sm btn-outline-secondary filter-region-btn" data-region="South">South</button>
+    <button class="btn btn-sm btn-outline-secondary filter-region-btn" data-region="East">East</button>
+    <button class="btn btn-sm btn-outline-secondary filter-region-btn" data-region="West">West</button>
+    <button class="btn btn-sm btn-outline-secondary filter-region-btn" data-region="Central">Central</button>
 </div>
 
-<!-- Store grid -->
+<!-- Store grid (loaded via AJAX) -->
 <div class="card">
     <div class="card-body p-0">
         <div id="store-grid">
