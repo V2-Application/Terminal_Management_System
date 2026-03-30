@@ -1,0 +1,44 @@
+## .NET
+bin/
+obj/
+*.user
+*.suo
+.vs/
+_ReSharper*/
+*.DotSettings.user
+TestResults/
+*.nupkg
+*.snupkg
+
+## ASP.NET
+wwwroot/lib/
+node_modules/
+
+## SQL Server
+*.mdf
+*.ldf
+
+## Secrets - NEVER commit these
+**/appsettings.Production.json
+**/appsettings.Staging.json
+*secrets*
+*.pfx
+*.p12
+*.key
+agent.credentials.json
+agent.db
+
+## Logs
+*.log
+Logs/
+PackageCache/
+
+## VS Code
+.vscode/
+
+## Rider
+.idea/
+
+## OS
+.DS_Store
+Thumbs.db

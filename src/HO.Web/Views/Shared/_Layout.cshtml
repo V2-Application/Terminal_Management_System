@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] — RetailTMS</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+</head>
+<body>
+    <!-- Sidebar + main layout -->
+    <div class="d-flex" style="min-height:100vh">
+        <!-- Sidebar -->
+        <nav class="d-flex flex-column p-0 bg-white border-end" style="width:220px;min-height:100vh;flex-shrink:0">
+            <div class="p-3 border-bottom">
+                <div class="text-muted small fw-semibold text-uppercase" style="letter-spacing:.08em;font-size:11px">Retail Network</div>
+                <div class="fw-semibold" style="font-size:15px">FY-Close System</div>
+                <div class="text-muted" style="font-size:11px">Head Office Control</div>
+            </div>
+            <div class="flex-grow-1 py-2">
+                <a class="nav-link px-3 py-2 @(ViewContext.RouteData.Values["controller"]?.ToString() == "Dashboard" ? "text-primary fw-semibold border-start border-primary border-3" : "text-secondary")"
+                   asp-controller="Dashboard" asp-action="Index">▦ Dashboard</a>
+                <a class="nav-link px-3 py-2 @(ViewContext.RouteData.Values["controller"]?.ToString() == "FYClose" ? "text-primary fw-semibold border-start border-primary border-3" : "text-secondary")"
+                   asp-controller="FYClose" asp-action="Index">⚙ FY-Close Control</a>
+                <a class="nav-link px-3 py-2 @(ViewContext.RouteData.Values["controller"]?.ToString() == "Store" ? "text-primary fw-semibold border-start border-primary border-3" : "text-secondary")"
+                   asp-controller="Store" asp-action="Index">≡ Store Master</a>
+                <a class="nav-link px-3 py-2 text-secondary" asp-controller="Terminal" asp-action="Index">◈ Terminals</a>
+                <a class="nav-link px-3 py-2 text-secondary" asp-controller="Audit" asp-action="Index">☰ Audit Logs</a>
+            </div>
+            <div class="p-3 border-top">
+                <div class="text-muted small">@User.Identity?.Name</div>
+                <a asp-controller="Account" asp-action="Logout" class="text-danger small">Sign out</a>
+            </div>
+        </nav>
+
+        <!-- Main -->
+        <div class="flex-grow-1 d-flex flex-column">
+            <!-- Topbar -->
+            <div class="border-bottom bg-white px-4 py-2 d-flex align-items-center justify-content-between" style="height:50px">
+                <span class="fw-semibold">@ViewData["Title"]</span>
+                <span class="text-muted small font-monospace">FY2025 | 31 Mar 2025</span>
+            </div>
+
+            <!-- Alerts -->
+            @if (TempData["Success"] != null)
+            {
+                <div class="alert alert-success alert-dismissible mx-4 mt-3 mb-0">
+                    @TempData["Success"] <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            }
+            @if (TempData["Error"] != null)
+            {
+                <div class="alert alert-danger alert-dismissible mx-4 mt-3 mb-0">
+                    @TempData["Error"] <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            }
+
+            <!-- Content -->
+            <main class="flex-grow-1 p-4">
+                @RenderBody()
+            </main>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

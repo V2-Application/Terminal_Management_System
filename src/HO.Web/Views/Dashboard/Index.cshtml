@@ -1,0 +1,117 @@
+@model HO.Application.DTOs.DashboardSummaryDto
+@{
+    ViewData["Title"] = "Live Dashboard";
+    Layout = "_Layout";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4 class="mb-0">Live Operations Dashboard</h4>
+    <div>
+        <span id="live-indicator" class="badge bg-success me-2">● Live</span>
+        <span class="text-muted small" id="last-updated">Updated just now</span>
+    </div>
+</div>
+
+<!-- KPI Cards -->
+<div class="row g-3 mb-4" id="kpi-row">
+    <div class="col-md-2">
+        <div class="card border-0 bg-light">
+            <div class="card-body text-center p-3">
+                <div class="text-muted small">Total Stores</div>
+                <div class="fs-2 fw-semibold" id="kpi-total">@Model.TotalStores</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card border-0" style="background:#EAF3DE">
+            <div class="card-body text-center p-3">
+                <div class="text-muted small">Completed</div>
+                <div class="fs-2 fw-semibold text-success" id="kpi-completed">@Model.Completed</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card border-0" style="background:#FAEEDA">
+            <div class="card-body text-center p-3">
+                <div class="text-muted small">Running</div>
+                <div class="fs-2 fw-semibold text-warning" id="kpi-running">@Model.Running</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card border-0 bg-light">
+            <div class="card-body text-center p-3">
+                <div class="text-muted small">Pending</div>
+                <div class="fs-2 fw-semibold" id="kpi-pending">@Model.Pending</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card border-0" style="background:#FCEBEB">
+            <div class="card-body text-center p-3">
+                <div class="text-muted small">Failed</div>
+                <div class="fs-2 fw-semibold text-danger" id="kpi-failed">@Model.Failed</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card border-0 bg-light">
+            <div class="card-body text-center p-3">
+                <div class="text-muted small">Offline</div>
+                <div class="fs-2 fw-semibold text-secondary" id="kpi-offline">@Model.Offline</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (Model.ActiveFYJobId != null)
+{
+    <!-- Overall Progress -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="d-flex justify-content-between mb-2">
+                <span class="fw-semibold">Batch @Model.ActiveFYYear — Overall Progress</span>
+                <span class="text-muted small" id="progress-label">@Model.Completed / @Model.TotalStores stores completed</span>
+            </div>
+            <div class="progress" style="height:10px">
+                <div class="progress-bar bg-success" id="overall-progress"
+                     role="progressbar" style="width:@Model.CompletionPct%"></div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Store Grid (loaded via AJAX) -->
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span>Store Status Grid</span>
+        <div class="d-flex gap-2">
+            <select class="form-select form-select-sm" id="filter-status" style="width:auto">
+                <option value="">All Statuses</option>
+                <option value="Pending">Pending</option>
+                <option value="Completed">Completed</option>
+                <option value="Failed">Failed</option>
+                <option value="Offline">Offline</option>
+            </select>
+            <select class="form-select form-select-sm" id="filter-region" style="width:auto">
+                <option value="">All Regions</option>
+                <option>North</option><option>South</option>
+                <option>East</option><option>West</option><option>Central</option>
+            </select>
+        </div>
+    </div>
+    <div class="card-body p-0">
+        <div id="store-grid">
+            <div class="text-center p-4 text-muted">Loading stores...</div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script src="~/lib/signalr/dist/browser/signalr.min.js"></script>
+<script src="~/js/dashboard.js"></script>
+<script>
+    const fyJobId = '@Model.ActiveFYJobId';
+    initDashboard(fyJobId);
+</script>
+}
