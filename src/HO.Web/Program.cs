@@ -4,9 +4,19 @@ using HO.Infrastructure.SignalR;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddSignalR();            // BEFORE AddInfrastructure
+builder.Services.AddSignalR();
 builder.Services.AddInfrastructure(builder.Configuration);
-builder.Services.AddControllersWithViews();
+
+// MVC with JSON options to handle circular refs + enum as strings
+builder.Services.AddControllersWithViews()
+    .AddJsonOptions(opts => {
+        opts.JsonSerializerOptions.ReferenceHandler =
+            System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
+        opts.JsonSerializerOptions.PropertyNamingPolicy =
+            System.Text.Json.JsonNamingPolicy.CamelCase;
+        opts.JsonSerializerOptions.WriteIndented = false;
+    });
+
 builder.Services.AddMediatR(cfg =>
     cfg.RegisterServicesFromAssembly(
         typeof(HO.Application.Queries.Dashboard.GetDashboardSummaryQuery).Assembly));
@@ -14,20 +24,20 @@ builder.Services.AddMediatR(cfg =>
 builder.Services.AddAuthentication("Cookies")
     .AddCookie("Cookies", opts =>
     {
-        opts.LoginPath           = "/Account/Login";
-        opts.LogoutPath          = "/Account/Logout";
-        opts.SlidingExpiration   = true;
-        opts.ExpireTimeSpan      = TimeSpan.FromHours(8);
-        opts.Cookie.HttpOnly     = true;
+        opts.LoginPath         = "/Account/Login";
+        opts.LogoutPath        = "/Account/Logout";
+        opts.SlidingExpiration = true;
+        opts.ExpireTimeSpan    = TimeSpan.FromHours(8);
+        opts.Cookie.HttpOnly   = true;
         opts.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
-        opts.Cookie.SameSite     = SameSiteMode.Lax;
+        opts.Cookie.SameSite   = SameSiteMode.Lax;
     });
 
 builder.Services.AddAuthorization();
 
 var app = builder.Build();
 
-// Initialize DB: create tables if missing, seed sample data if empty
+// DB init — create tables + seed if needed
 using (var scope = app.Services.CreateScope())
 {
     var db     = scope.ServiceProvider.GetRequiredService<AppDbContext>();

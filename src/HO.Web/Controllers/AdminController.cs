@@ -32,7 +32,8 @@ public class AdminController : Controller
     {
         var q = _db.Stores.Include(s => s.Terminals).AsQueryable();
         if (!string.IsNullOrEmpty(region)) q = q.Where(s => s.Region == region);
-        if (!string.IsNullOrEmpty(status)) q = q.Where(s => s.Status.ToString() == status);
+        if (!string.IsNullOrEmpty(status) && Enum.TryParse<StoreStatus>(status, out var ss))
+            q = q.Where(s => s.Status == ss);
         if (!string.IsNullOrEmpty(search))
             q = q.Where(s => s.StoreCode.Contains(search) || s.StoreName.Contains(search));
 
@@ -41,7 +42,7 @@ public class AdminController : Controller
             .Skip((page - 1) * pageSize).Take(pageSize)
             .Select(s => new {
                 s.StoreId, s.StoreCode, s.StoreName, s.Region, s.Zone,
-                s.Priority, s.Status, s.FYCloseStatus, s.ContactEmail,
+                s.Priority, status = s.Status.ToString(), fyCloseStatus = s.FYCloseStatus.ToString(), s.ContactEmail,
                 s.ContactPhone, s.IsDeleted, s.CreatedAt, s.UpdatedAt,
                 TerminalCount = s.Terminals.Count,
                 ActiveTerminals = s.Terminals.Count(t => t.Status == TerminalStatus.Active)
@@ -53,9 +54,20 @@ public class AdminController : Controller
     [HttpGet("Stores/{id}")]
     public async Task<JsonResult> GetStore(Guid id, CancellationToken ct)
     {
-        var s = await _db.Stores.Include(x => x.Terminals).FirstOrDefaultAsync(x => x.StoreId == id, ct);
+        var s = await _db.Stores
+            .Include(x => x.Terminals)
+            .FirstOrDefaultAsync(x => x.StoreId == id, ct);
         if (s == null) return Json(new { error = "Not found" });
-        return Json(s);
+        return Json(new {
+            s.StoreId, s.StoreCode, s.StoreName, s.Region, s.Zone,
+            s.Priority, s.ContactEmail, s.ContactPhone,
+            status = s.Status.ToString(),
+            fyCloseStatus = s.FYCloseStatus.ToString(),
+            s.IsDeleted, s.CreatedAt, s.UpdatedAt,
+            terminals = s.Terminals.Select(t => new {
+                t.TerminalId, t.TerminalCode, t.Status, t.IsPrimary, t.LastHeartbeat
+            }).ToList()
+        });
     }
 
     [HttpPost("Stores")]
@@ -122,7 +134,8 @@ public class AdminController : Controller
     {
         var q = _db.Terminals.Include(t => t.Store).AsQueryable();
         if (storeId.HasValue) q = q.Where(t => t.StoreId == storeId.Value);
-        if (!string.IsNullOrEmpty(status)) q = q.Where(t => t.Status.ToString() == status);
+        if (!string.IsNullOrEmpty(status) && Enum.TryParse<TerminalStatus>(status, out var ts))
+            q = q.Where(t => t.Status == ts);
         if (!string.IsNullOrEmpty(search))
             q = q.Where(t => t.TerminalCode.Contains(search) || t.MachineName.Contains(search));
 
@@ -133,7 +146,7 @@ public class AdminController : Controller
                 t.TerminalId, t.StoreId,
                 StoreCode = t.Store.StoreCode, StoreName = t.Store.StoreName,
                 t.TerminalCode, t.MachineName, t.IpAddress, t.OsVersion,
-                t.AgentVersion, t.PosVersion, t.Status, t.IsPrimary,
+                t.AgentVersion, t.PosVersion, status = t.Status.ToString(), t.IsPrimary,
                 t.LastHeartbeat, t.DiskFreeGB, t.IsDeleted, t.CreatedAt, t.UpdatedAt
             }).ToListAsync(ct);
 
@@ -183,24 +196,37 @@ public class AdminController : Controller
     {
         var q = _db.Commands
             .Include(c => c.Terminal).ThenInclude(t => t.Store)
-            .Include(c => c.Executions).AsQueryable();
-        if (!string.IsNullOrEmpty(status)) q = q.Where(c => c.Status.ToString() == status);
-        if (!string.IsNullOrEmpty(commandType)) q = q.Where(c => c.CommandType.ToString() == commandType);
+            .AsQueryable();
+
+        if (!string.IsNullOrEmpty(status) && Enum.TryParse<CommandStatus>(status, out var cs))
+            q = q.Where(c => c.Status == cs);
+        if (!string.IsNullOrEmpty(commandType) && Enum.TryParse<CommandType>(commandType, out var ct2))
+            q = q.Where(c => c.CommandType == ct2);
         if (storeId.HasValue) q = q.Where(c => c.StoreId == storeId.Value);
 
         var total = await q.CountAsync(ct);
-        var items = await q.OrderByDescending(c => c.CreatedAt)
+        var rawItems = await q.OrderByDescending(c => c.CreatedAt)
             .Skip((page - 1) * pageSize).Take(pageSize)
-            .Select(c => new {
-                c.CommandId, c.CommandType, c.Status, c.Priority,
-                c.StoreId, StoreCode = c.Terminal.Store.StoreCode,
-                c.TerminalId, TerminalCode = c.Terminal.TerminalCode,
-                c.FYJobId, c.PackageId,
-                c.CreatedAt, c.DispatchedAt, c.StartedAt, c.CompletedAt,
-                c.RetryCount, c.MaxRetries, c.RetryAfter,
-                LastExitCode = c.Executions.OrderByDescending(e=>e.StartedAt)
-                    .Select(e=>e.ExitCode).FirstOrDefault()
-            }).ToListAsync(ct);
+            .ToListAsync(ct);
+
+        // Resolve exit codes in memory (no EF translation needed)
+        var commandIds = rawItems.Select(c => c.CommandId).ToList();
+        var exitCodes = await _db.CommandExecutions
+            .Where(e => commandIds.Contains(e.CommandId))
+            .GroupBy(e => e.CommandId)
+            .Select(g => new { g.Key, ExitCode = g.OrderByDescending(e => e.StartedAt).First().ExitCode })
+            .ToDictionaryAsync(x => x.Key, x => x.ExitCode, ct);
+
+        var items = rawItems.Select(c => new {
+            c.CommandId, commandType = c.CommandType.ToString(), status = c.Status.ToString(),
+            c.Priority,
+            c.StoreId, storeCode = c.Terminal?.Store?.StoreCode ?? "?",
+            c.TerminalId, terminalCode = c.Terminal?.TerminalCode ?? "?",
+            c.FYJobId, c.PackageId,
+            c.CreatedAt, c.DispatchedAt, c.StartedAt, c.CompletedAt,
+            c.RetryCount, c.MaxRetries, c.RetryAfter,
+            lastExitCode = exitCodes.TryGetValue(c.CommandId, out var ec) ? ec : (int?)null
+        }).ToList();
 
         return Json(new { total, page, pageSize, items });
     }
@@ -235,14 +261,14 @@ public class AdminController : Controller
         var items = await _db.FinancialYearJobs
             .OrderByDescending(j => j.CreatedAt)
             .Select(j => new {
-                j.FYJobId, j.FYYear, j.Status, j.Phase,
+                j.FYJobId, j.FYYear, status = j.Status.ToString(), phase = j.Phase.ToString(),
                 j.WaveSize, j.WaveIntervalMinutes,
                 j.TotalStores, j.CompletedStores, j.FailedStores, j.OfflineStores,
                 j.ScriptPackageId, j.RollbackPackageId,
                 j.ExecutionWindowStart, j.ExecutionWindowEnd,
                 j.StartedAt, j.CompletedAt, j.StartedBy,
-                CompletionPct = j.TotalStores > 0
-                    ? (int)(j.CompletedStores * 100.0 / j.TotalStores) : 0
+                completionPct = j.TotalStores != null && j.TotalStores > 0
+                    ? (int)((double)j.CompletedStores / j.TotalStores.Value * 100) : 0
             }).ToListAsync(ct);
         return Json(items);
     }
@@ -400,37 +426,37 @@ public class AdminController : Controller
     {
         return Json(new {
             stores = new {
-                total = await _db.Stores.CountAsync(ct),
-                active = await _db.Stores.CountAsync(s => s.Status == StoreStatus.Active, ct),
-                inactive = await _db.Stores.CountAsync(s => s.Status == StoreStatus.Inactive, ct),
-                fyCompleted = await _db.Stores.CountAsync(s => s.FYCloseStatus == FYCloseStatus.Completed, ct),
-                fyFailed = await _db.Stores.CountAsync(s => s.FYCloseStatus == FYCloseStatus.Failed, ct),
-                fyPending = await _db.Stores.CountAsync(s => s.FYCloseStatus == FYCloseStatus.Pending, ct),
+                total      = await _db.Stores.CountAsync(ct),
+                active     = await _db.Stores.Where(s => s.Status == StoreStatus.Active).CountAsync(ct),
+                inactive   = await _db.Stores.Where(s => s.Status == StoreStatus.Inactive).CountAsync(ct),
+                fyCompleted= await _db.Stores.Where(s => s.FYCloseStatus == FYCloseStatus.Completed).CountAsync(ct),
+                fyFailed   = await _db.Stores.Where(s => s.FYCloseStatus == FYCloseStatus.Failed).CountAsync(ct),
+                fyPending  = await _db.Stores.Where(s => s.FYCloseStatus == FYCloseStatus.Pending).CountAsync(ct),
             },
             terminals = new {
-                total = await _db.Terminals.CountAsync(ct),
-                online = await _db.Terminals.CountAsync(t => t.Status == TerminalStatus.Active, ct),
-                offline = await _db.Terminals.CountAsync(t => t.Status == TerminalStatus.Offline, ct),
-                locked = await _db.Terminals.CountAsync(t => t.Status == TerminalStatus.Locked, ct),
+                total   = await _db.Terminals.CountAsync(ct),
+                online  = await _db.Terminals.Where(t => t.Status == TerminalStatus.Active).CountAsync(ct),
+                offline = await _db.Terminals.Where(t => t.Status == TerminalStatus.Offline).CountAsync(ct),
+                locked  = await _db.Terminals.Where(t => t.Status == TerminalStatus.Locked).CountAsync(ct),
             },
             commands = new {
-                total = await _db.Commands.CountAsync(ct),
-                queued = await _db.Commands.CountAsync(c => c.Status == CommandStatus.Queued, ct),
-                running = await _db.Commands.CountAsync(c => c.Status == CommandStatus.Running, ct),
-                success = await _db.Commands.CountAsync(c => c.Status == CommandStatus.Success, ct),
-                failed = await _db.Commands.CountAsync(c => c.Status == CommandStatus.Failed, ct),
+                total   = await _db.Commands.CountAsync(ct),
+                queued  = await _db.Commands.Where(c => c.Status == CommandStatus.Queued).CountAsync(ct),
+                running = await _db.Commands.Where(c => c.Status == CommandStatus.Running).CountAsync(ct),
+                success = await _db.Commands.Where(c => c.Status == CommandStatus.Success).CountAsync(ct),
+                failed  = await _db.Commands.Where(c => c.Status == CommandStatus.Failed).CountAsync(ct),
             },
             packages = new {
-                total = await _db.ScriptPackages.CountAsync(ct),
-                active = await _db.ScriptPackages.CountAsync(p => p.IsActive, ct),
+                total  = await _db.ScriptPackages.CountAsync(ct),
+                active = await _db.ScriptPackages.Where(p => p.IsActive).CountAsync(ct),
             },
             heartbeats = new {
-                total = await _db.Heartbeats.CountAsync(ct),
-                last24h = await _db.Heartbeats.CountAsync(h => h.ReceivedAt > DateTime.UtcNow.AddHours(-24), ct),
+                total   = await _db.Heartbeats.CountAsync(ct),
+                last24h = await _db.Heartbeats.Where(h => h.ReceivedAt > DateTime.UtcNow.AddHours(-24)).CountAsync(ct),
             },
             auditLogs = new {
                 total = await _db.AuditLogs.CountAsync(ct),
-                today = await _db.AuditLogs.CountAsync(a => a.Timestamp > DateTime.UtcNow.Date, ct),
+                today = await _db.AuditLogs.Where(a => a.Timestamp > DateTime.UtcNow.Date).CountAsync(ct),
             }
         });
     }
