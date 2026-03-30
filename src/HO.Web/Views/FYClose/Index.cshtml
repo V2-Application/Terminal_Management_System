@@ -19,18 +19,22 @@
         </div>
         <div class="card-body">
             <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-bottom:16px">
-                @{
-                    void Tile(string label, string val, string color) {
-                        <div style="text-align:center;background:#F8F9FA;border-radius:6px;padding:10px">
-                            <div style="font-size:11px;color:#888;margin-bottom:2px">@label</div>
-                            <div style="font-size:22px;font-weight:700;color:@color;font-family:monospace">@val</div>
-                        </div>;
-                    }
-                }
-                @{ Tile("Total", (activeJob.TotalStores??0).ToString(), "#212529"); }
-                @{ Tile("Done",  activeJob.CompletedStores.ToString(), "#3B6D11"); }
-                @{ Tile("Failed",activeJob.FailedStores.ToString(),    "#A32D2D"); }
-                @{ Tile("Offline",activeJob.OfflineStores.ToString(),  "#5F5E5A"); }
+                <div style="text-align:center;background:#F8F9FA;border-radius:6px;padding:10px">
+                    <div style="font-size:11px;color:#888;margin-bottom:2px">Total</div>
+                    <div style="font-size:22px;font-weight:700;color:#212529;font-family:monospace">@(activeJob.TotalStores??0)</div>
+                </div>
+                <div style="text-align:center;background:#EAF3DE;border-radius:6px;padding:10px">
+                    <div style="font-size:11px;color:#3B6D11;margin-bottom:2px">Done</div>
+                    <div style="font-size:22px;font-weight:700;color:#3B6D11;font-family:monospace">@activeJob.CompletedStores</div>
+                </div>
+                <div style="text-align:center;background:#FCEBEB;border-radius:6px;padding:10px">
+                    <div style="font-size:11px;color:#A32D2D;margin-bottom:2px">Failed</div>
+                    <div style="font-size:22px;font-weight:700;color:#A32D2D;font-family:monospace">@activeJob.FailedStores</div>
+                </div>
+                <div style="text-align:center;background:#F1EFE8;border-radius:6px;padding:10px">
+                    <div style="font-size:11px;color:#5F5E5A;margin-bottom:2px">Offline</div>
+                    <div style="font-size:22px;font-weight:700;color:#5F5E5A;font-family:monospace">@activeJob.OfflineStores</div>
+                </div>
             </div>
             @{
                 var pct = (activeJob.TotalStores??1) > 0
