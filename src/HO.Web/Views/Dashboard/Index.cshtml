@@ -1,117 +1,91 @@
 @model HO.Application.DTOs.DashboardSummaryDto
 @{
     ViewData["Title"] = "Live Dashboard";
-    Layout = "_Layout";
 }
 
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h4 class="mb-0">Live Operations Dashboard</h4>
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div></div>
     <div>
-        <span id="live-indicator" class="badge bg-success me-2">● Live</span>
-        <span class="text-muted small" id="last-updated">Updated just now</span>
+        <span id="live-indicator" class="badge bg-success me-2" style="font-size:11px">● Live</span>
+        <span class="text-muted" style="font-size:11px" id="last-updated">Connecting...</span>
     </div>
 </div>
 
-<!-- KPI Cards -->
-<div class="row g-3 mb-4" id="kpi-row">
-    <div class="col-md-2">
-        <div class="card border-0 bg-light">
-            <div class="card-body text-center p-3">
-                <div class="text-muted small">Total Stores</div>
-                <div class="fs-2 fw-semibold" id="kpi-total">@Model.TotalStores</div>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-2">
-        <div class="card border-0" style="background:#EAF3DE">
-            <div class="card-body text-center p-3">
-                <div class="text-muted small">Completed</div>
-                <div class="fs-2 fw-semibold text-success" id="kpi-completed">@Model.Completed</div>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-2">
-        <div class="card border-0" style="background:#FAEEDA">
-            <div class="card-body text-center p-3">
-                <div class="text-muted small">Running</div>
-                <div class="fs-2 fw-semibold text-warning" id="kpi-running">@Model.Running</div>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-2">
-        <div class="card border-0 bg-light">
-            <div class="card-body text-center p-3">
-                <div class="text-muted small">Pending</div>
-                <div class="fs-2 fw-semibold" id="kpi-pending">@Model.Pending</div>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-2">
-        <div class="card border-0" style="background:#FCEBEB">
-            <div class="card-body text-center p-3">
-                <div class="text-muted small">Failed</div>
-                <div class="fs-2 fw-semibold text-danger" id="kpi-failed">@Model.Failed</div>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-2">
-        <div class="card border-0 bg-light">
-            <div class="card-body text-center p-3">
-                <div class="text-muted small">Offline</div>
-                <div class="fs-2 fw-semibold text-secondary" id="kpi-offline">@Model.Offline</div>
-            </div>
-        </div>
-    </div>
+<!-- KPI cards -->
+<div class="row g-3 mb-4">
+    @{
+        void KPI(string label, string id, string val, string bg, string color) {
+            <div class="col-md-2">
+                <div style="background:@bg;border-radius:8px;padding:12px;text-align:center">
+                    <div class="text-muted" style="font-size:11px">@label</div>
+                    <div id="@id" style="font-size:28px;font-weight:600;color:@color;
+                         font-family:monospace;line-height:1.2">@val</div>
+                </div>
+            </div>;
+        }
+    }
+    @{ KPI("Total Stores",  "kpi-total",     Model.TotalStores.ToString(), "#F8F9FA", "#212529"); }
+    @{ KPI("Completed",     "kpi-completed", Model.Completed.ToString(),   "#EAF3DE", "#3B6D11"); }
+    @{ KPI("Running",       "kpi-running",   Model.Running.ToString(),     "#FAEEDA", "#854F0B"); }
+    @{ KPI("Pending",       "kpi-pending",   Model.Pending.ToString(),     "#F8F9FA", "#6C757D"); }
+    @{ KPI("Failed",        "kpi-failed",    Model.Failed.ToString(),      "#FCEBEB", "#A32D2D"); }
+    @{ KPI("Offline",       "kpi-offline",   Model.Offline.ToString(),     "#F1EFE8", "#5F5E5A"); }
 </div>
 
 @if (Model.ActiveFYJobId != null)
 {
-    <!-- Overall Progress -->
-    <div class="card mb-4">
-        <div class="card-body">
-            <div class="d-flex justify-content-between mb-2">
-                <span class="fw-semibold">Batch @Model.ActiveFYYear — Overall Progress</span>
-                <span class="text-muted small" id="progress-label">@Model.Completed / @Model.TotalStores stores completed</span>
+    <div class="card mb-3">
+        <div class="card-body py-2">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <span class="fw-semibold" style="font-size:13px">
+                    Batch @Model.ActiveFYYear — Overall Progress
+                </span>
+                <span class="text-muted" style="font-size:12px;font-family:monospace"
+                      id="progress-label">
+                    @Model.Completed / @Model.TotalStores stores
+                </span>
             </div>
-            <div class="progress" style="height:10px">
+            <div class="progress" style="height:8px">
                 <div class="progress-bar bg-success" id="overall-progress"
-                     role="progressbar" style="width:@Model.CompletionPct%"></div>
+                     role="progressbar"
+                     style="width:@Model.CompletionPct%;transition:width .5s ease"></div>
             </div>
         </div>
     </div>
 }
 
-<!-- Store Grid (loaded via AJAX) -->
+<!-- Filters -->
+<div class="d-flex gap-2 mb-3 flex-wrap">
+    @foreach (var s in new[]{"","Pending","Running","Success","Failed","Offline"})
+    {
+        <button class="btn btn-sm btn-outline-secondary filter-status-btn"
+                data-status="@s" style="font-size:12px">
+            @(string.IsNullOrEmpty(s)?"All":s)
+        </button>
+    }
+    <div class="vr mx-1"></div>
+    @foreach (var r in new[]{"","North","South","East","West","Central"})
+    {
+        <button class="btn btn-sm btn-outline-secondary filter-region-btn"
+                data-region="@r" style="font-size:12px">
+            @(string.IsNullOrEmpty(r)?"All regions":r)
+        </button>
+    }
+</div>
+
+<!-- Store grid -->
 <div class="card">
-    <div class="card-header d-flex justify-content-between align-items-center">
-        <span>Store Status Grid</span>
-        <div class="d-flex gap-2">
-            <select class="form-select form-select-sm" id="filter-status" style="width:auto">
-                <option value="">All Statuses</option>
-                <option value="Pending">Pending</option>
-                <option value="Completed">Completed</option>
-                <option value="Failed">Failed</option>
-                <option value="Offline">Offline</option>
-            </select>
-            <select class="form-select form-select-sm" id="filter-region" style="width:auto">
-                <option value="">All Regions</option>
-                <option>North</option><option>South</option>
-                <option>East</option><option>West</option><option>Central</option>
-            </select>
-        </div>
-    </div>
     <div class="card-body p-0">
         <div id="store-grid">
-            <div class="text-center p-4 text-muted">Loading stores...</div>
+            <div class="text-center p-4 text-muted" style="font-size:13px">Loading stores...</div>
         </div>
     </div>
 </div>
 
 @section Scripts {
-<script src="~/lib/signalr/dist/browser/signalr.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script>
 <script src="~/js/dashboard.js"></script>
 <script>
-    const fyJobId = '@Model.ActiveFYJobId';
-    initDashboard(fyJobId);
+    initDashboard('@Model.ActiveFYJobId');
 </script>
 }

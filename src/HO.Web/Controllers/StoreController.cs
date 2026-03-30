@@ -53,3 +53,17 @@ public class StoreController : Controller
         return Json(new { success = true });
     }
 }
+
+    /// <summary>AJAX endpoint — returns partial HTML for the store status grid.</summary>
+    [HttpGet]
+    public async Task<IActionResult> GridData(string? status, string? region, CancellationToken ct)
+    {
+        var stores = string.IsNullOrWhiteSpace(region)
+            ? await _storeRepo.GetAllAsync(ct: ct)
+            : await _storeRepo.GetByRegionAsync(region, ct);
+
+        if (!string.IsNullOrWhiteSpace(status))
+            stores = stores.Where(s => s.FYCloseStatus.ToString() == status);
+
+        return PartialView("_StoreGrid", stores);
+    }

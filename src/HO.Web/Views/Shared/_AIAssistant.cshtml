@@ -1,132 +1,125 @@
-@* Claude AI Assistant Panel — include in Dashboard and FY-Close views *@
+@* Claude AI Assistant Panel — include in Dashboard and FY-Close views via @await Html.PartialAsync("_AIAssistant") *@
 <div class="card mt-3" id="ai-panel">
-    <div class="card-header d-flex justify-content-between align-items-center" style="background:#1F3864">
-        <span class="text-white fw-semibold" style="font-size:13px">
-            ✦ Claude AI Assistant
-        </span>
-        <span class="badge" style="background:#2E75B6;font-size:10px">Powered by Anthropic</span>
+    <div class="card-header d-flex justify-content-between align-items-center"
+         style="background:#1F3864;border-radius:10px 10px 0 0">
+        <span class="text-white fw-semibold" style="font-size:13px">✦ Claude AI Assistant</span>
+        <span class="badge" style="background:#2E75B6;font-size:10px">Anthropic</span>
     </div>
     <div class="card-body p-3">
 
-        <!-- AI Batch Summary (auto-loads) -->
-        <div id="ai-summary-box" class="mb-3 p-2 rounded" style="background:#F0F4FF;font-size:13px;min-height:40px">
+        <!-- Auto-loaded AI batch summary -->
+        <div id="ai-summary-box" class="mb-3 p-2 rounded"
+             style="background:#F0F4FF;font-size:13px;min-height:38px;border-left:3px solid #185FA5">
             <span class="text-muted small">Loading AI summary...</span>
         </div>
 
-        <!-- Chat interface -->
-        <div id="ai-chat-history" class="mb-2"
-             style="max-height:200px;overflow-y:auto;font-size:13px;border:0.5px solid #E0E0E0;border-radius:6px;padding:8px;background:#FAFAFA">
-            <div class="text-muted small">Ask me anything about the current batch...</div>
+        <!-- Chat history -->
+        <div id="ai-chat-history" style="max-height:180px;overflow-y:auto;font-size:12px;
+             border:0.5px solid #E0E0E0;border-radius:6px;padding:8px;background:#FAFAFA;margin-bottom:8px">
+            <div class="text-muted small">Ask me about the current FY-Close batch...</div>
         </div>
 
-        <div class="input-group input-group-sm mt-2">
+        <!-- Input -->
+        <div class="input-group input-group-sm">
             <input type="text" id="ai-chat-input" class="form-control"
-                   placeholder="e.g. Why did Store ST042 fail? Is it safe to retry North region?"
+                   placeholder="e.g. Why did ST042 fail? Is North region safe to retry?"
                    style="font-size:12px" />
             <button class="btn btn-sm" id="ai-chat-send"
                     style="background:#1F3864;color:white;font-size:12px">Ask ↗</button>
         </div>
 
+        <!-- Quick question chips -->
         <div class="mt-2 d-flex gap-2 flex-wrap">
-            <button class="btn btn-sm btn-outline-secondary"
-                    style="font-size:11px" onclick="aiQuickAsk('How many stores are still pending?')">
-                Pending count?
-            </button>
-            <button class="btn btn-sm btn-outline-secondary"
-                    style="font-size:11px" onclick="aiQuickAsk('What should I do about failed stores?')">
-                Failed stores advice
-            </button>
-            <button class="btn btn-sm btn-outline-secondary"
-                    style="font-size:11px" onclick="aiQuickAsk('Is it safe to proceed with the next wave?')">
-                Safe to continue?
-            </button>
+            <button class="btn btn-sm btn-outline-secondary" style="font-size:11px"
+                    onclick="aiQuickAsk('How many stores are still pending?')">Pending?</button>
+            <button class="btn btn-sm btn-outline-secondary" style="font-size:11px"
+                    onclick="aiQuickAsk('What should I do about failed stores?')">Failed advice</button>
+            <button class="btn btn-sm btn-outline-secondary" style="font-size:11px"
+                    onclick="aiQuickAsk('Is it safe to continue to the next wave?')">Safe to continue?</button>
         </div>
     </div>
 </div>
 
-@section Scripts {
 <script>
-// AI Assistant Panel
-document.addEventListener('DOMContentLoaded', async () => {
-    await loadAISummary();
-    document.getElementById('ai-chat-send').addEventListener('click', sendAIChat);
-    document.getElementById('ai-chat-input').addEventListener('keydown', e => {
-        if (e.key === 'Enter') sendAIChat();
-    });
-});
+// AI panel initialises after DOM ready — safe in partial views
+(function () {
+    // Load summary on page load
+    loadAISummary();
 
-async function loadAISummary() {
-    try {
-        const resp = await fetch('/api/ai/batch-summary');
-        const data = await resp.json();
-        const box = document.getElementById('ai-summary-box');
-        box.innerHTML = `<span style="color:#1F3864">✦</span> ${data.summary}`;
-    } catch {
-        document.getElementById('ai-summary-box').innerHTML =
-            '<span class="text-muted small">AI summary unavailable</span>';
-    }
-}
+    document.getElementById('ai-chat-send')
+        ?.addEventListener('click', sendAIChat);
+    document.getElementById('ai-chat-input')
+        ?.addEventListener('keydown', e => { if (e.key === 'Enter') sendAIChat(); });
 
-async function sendAIChat() {
-    const input = document.getElementById('ai-chat-input');
-    const msg = input.value.trim();
-    if (!msg) return;
-
-    appendChatMessage('You', msg, '#E6F1FB', '#185FA5');
-    input.value = '';
-
-    try {
-        const resp = await fetch('/api/ai/chat', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message: msg })
-        });
-        const data = await resp.json();
-        appendChatMessage('Claude', data.answer, '#F0F4FF', '#1F3864');
-    } catch {
-        appendChatMessage('Claude', 'AI service unavailable', '#FEF9E7', '#E67E22');
-    }
-}
-
-function aiQuickAsk(question) {
-    document.getElementById('ai-chat-input').value = question;
-    sendAIChat();
-}
-
-function appendChatMessage(sender, text, bg, color) {
-    const history = document.getElementById('ai-chat-history');
-    const div = document.createElement('div');
-    div.style.cssText = `background:${bg};color:${color};padding:6px 8px;border-radius:4px;margin-bottom:4px;font-size:12px`;
-    div.innerHTML = `<strong>${sender}:</strong> ${text}`;
-    history.appendChild(div);
-    history.scrollTop = history.scrollHeight;
-}
-
-// Called from store grid "AI Diagnose" buttons
-async function aiDiagnoseCommand(commandId) {
-    const btn = document.querySelector(`[data-diagnose="${commandId}"]`);
-    if (btn) { btn.textContent = 'Analyzing...'; btn.disabled = true; }
-
-    try {
-        const resp = await fetch(`/api/ai/diagnose/${commandId}`, { method: 'POST' });
-        const data = await resp.json();
-
-        const panel = document.getElementById('ai-chat-history');
-        const div = document.createElement('div');
-        div.style.cssText = 'background:#FCEBEB;padding:8px;border-radius:4px;margin-bottom:6px;font-size:12px';
-        div.innerHTML = `
-            <div><strong style="color:#A32D2D">✦ AI Diagnosis — ${commandId.substring(0,8)}...</strong></div>
-            <div><strong>Root cause:</strong> ${data.rootCause}</div>
-            <div><strong>Action:</strong> ${data.recommendedAction}</div>
-            <div><strong>Safe to retry:</strong> ${data.isSafeToRetry ? '✓ Yes' : '✗ No'}</div>
-        `;
-        panel.appendChild(div);
-        panel.scrollTop = panel.scrollHeight;
-    } catch {
-        console.error('AI diagnosis failed');
+    async function loadAISummary() {
+        try {
+            const r    = await fetch('/api/ai/batch-summary');
+            const data = await r.json();
+            const box  = document.getElementById('ai-summary-box');
+            if (box) box.innerHTML =
+                '<span style="color:#185FA5">✦</span> ' + data.summary;
+        } catch {
+            const box = document.getElementById('ai-summary-box');
+            if (box) box.innerHTML = '<span class="text-muted small">AI summary unavailable</span>';
+        }
     }
 
-    if (btn) { btn.textContent = 'AI Diagnose'; btn.disabled = false; }
-}
+    async function sendAIChat() {
+        const input = document.getElementById('ai-chat-input');
+        if (!input) return;
+        const msg = input.value.trim();
+        if (!msg) return;
+
+        appendChat('You', msg, '#E6F1FB', '#185FA5');
+        input.value = '';
+
+        try {
+            const r    = await fetch('/api/ai/chat', {
+                method:  'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body:    JSON.stringify({ message: msg })
+            });
+            const data = await r.json();
+            appendChat('Claude', data.answer, '#F0F4FF', '#1F3864');
+        } catch {
+            appendChat('Claude', 'AI unavailable', '#FEF9E7', '#E67E22');
+        }
+    }
+
+    window.aiQuickAsk = function (q) {
+        const input = document.getElementById('ai-chat-input');
+        if (input) { input.value = q; sendAIChat(); }
+    };
+
+    window.aiDiagnoseCommand = async function (commandId) {
+        const btn = document.querySelector('[data-diagnose="' + commandId + '"]');
+        if (btn) { btn.textContent = 'Analyzing...'; btn.disabled = true; }
+
+        try {
+            const r    = await fetch('/api/ai/diagnose/' + commandId, { method: 'POST' });
+            const data = await r.json();
+            appendChat('AI Diagnosis',
+                'Root cause: ' + data.rootCause +
+                ' | Action: ' + data.recommendedAction +
+                ' | Safe to retry: ' + (data.isSafeToRetry ? 'Yes' : 'No'),
+                '#FCEBEB', '#A32D2D');
+        } catch {
+            appendChat('AI', 'Diagnosis failed', '#FEF9E7', '#E67E22');
+        }
+
+        if (btn) { btn.textContent = 'AI Diagnose'; btn.disabled = false; }
+    };
+
+    function appendChat(sender, text, bg, color) {
+        const h = document.getElementById('ai-chat-history');
+        if (!h) return;
+        const d = document.createElement('div');
+        d.style.cssText = 'background:' + bg + ';color:' + color +
+            ';padding:5px 8px;border-radius:4px;margin-bottom:4px;font-size:12px';
+        d.innerHTML = '<strong>' + sender + ':</strong> ' +
+            text.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        h.appendChild(d);
+        h.scrollTop = h.scrollHeight;
+    }
+})();
 </script>
-}

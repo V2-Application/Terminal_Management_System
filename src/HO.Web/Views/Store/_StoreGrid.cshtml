@@ -1,0 +1,58 @@
+@model IEnumerable<HO.Domain.Entities.Store>
+<table class="table table-hover mb-0" style="font-size:13px">
+    <thead class="table-light">
+        <tr>
+            <th style="font-size:11px;color:#6C757D;text-transform:uppercase;letter-spacing:.04em">Store</th>
+            <th style="font-size:11px;color:#6C757D;text-transform:uppercase;letter-spacing:.04em">Name</th>
+            <th style="font-size:11px;color:#6C757D;text-transform:uppercase;letter-spacing:.04em">Region</th>
+            <th style="font-size:11px;color:#6C757D;text-transform:uppercase;letter-spacing:.04em">Status</th>
+            <th style="font-size:11px;color:#6C757D;text-transform:uppercase;letter-spacing:.04em">Step</th>
+            <th style="font-size:11px;color:#6C757D;text-transform:uppercase;letter-spacing:.04em">Last Updated</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+    @foreach (var s in Model)
+    {
+        var rowId = "store-row-" + s.StoreId;
+        var statusCls = s.FYCloseStatus.ToString() switch {
+            "Completed" => "status-completed",
+            "Failed"    => "status-failed",
+            "Pending"   => "status-pending",
+            "Offline"   => "status-offline",
+            _           => "status-pending"
+        };
+        <tr id="@rowId" style="border-bottom:0.5px solid #F0F0F0">
+            <td class="font-monospace fw-semibold" style="font-size:12px">@s.StoreCode</td>
+            <td>@s.StoreName</td>
+            <td><span class="badge bg-light text-dark" style="font-size:11px">@s.Region</span></td>
+            <td>
+                <span class="status-badge @statusCls status-cell">
+                    ● @s.FYCloseStatus
+                </span>
+            </td>
+            <td class="text-muted step-cell" style="font-size:11px">—</td>
+            <td class="text-muted" style="font-size:11px">
+                @(s.UpdatedAt.ToString("HH:mm dd-MMM"))
+            </td>
+            <td>
+                @if (s.FYCloseStatus.ToString() == "Failed")
+                {
+                    <button class="btn btn-sm"
+                            style="font-size:10px;background:#E6F1FB;color:#185FA5;border:none"
+                            data-store-id="@s.StoreId"
+                            onclick="retryStore('@s.StoreId')">Retry</button>
+                    <button class="btn btn-sm"
+                            style="font-size:10px;background:#FCEBEB;color:#A32D2D;border:none"
+                            data-store-id="@s.StoreId"
+                            onclick="rollbackStore('@s.StoreId')">Rollback</button>
+                }
+            </td>
+        </tr>
+    }
+    </tbody>
+</table>
+@if (!Model.Any())
+{
+    <div class="text-center p-4 text-muted" style="font-size:13px">No stores match the current filter</div>
+}

@@ -8,17 +8,14 @@ using HO.Infrastructure.Persistence.Repositories;
 using HO.Infrastructure.Security;
 using HO.Infrastructure.Services;
 using HO.Infrastructure.SignalR;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace HO.Infrastructure;
 
-/// <summary>
-/// Single entry point for registering ALL infrastructure services.
-/// Call services.AddInfrastructure(config) from Program.cs in HO.API and HO.Web.
-/// This is the only Infrastructure type that Program.cs needs to reference directly.
-/// </summary>
 public static class InfrastructureServiceExtensions
 {
     public static IServiceCollection AddInfrastructure(
@@ -43,10 +40,28 @@ public static class InfrastructureServiceExtensions
         services.AddScoped<ICommandService,  CommandService>();
         services.AddScoped<IFYCloseService,  FYCloseService>();
 
-        // ── Cross-cutting Services ────────────────────────────────────────────
+        // ── Cross-cutting ─────────────────────────────────────────────────────
         services.AddScoped<IAuditService,        AuditService>();
         services.AddScoped<INotificationService, EmailNotificationService>();
-        services.AddScoped<ISignalRService,      DashboardHubService>();
+
+        // ISignalRService — uses factory so IHubContext<DashboardHub> is resolved
+        // at request-time rather than startup, avoiding startup failure in HO.API
+        // where SignalR is not mounted. Falls back to NullSignalRService if unavailable.
+        services.AddScoped<ISignalRService>(sp =>
+        {
+            try
+            {
+                var hubContext = sp.GetService<IHubContext<DashboardHub>>();
+                if (hubContext != null)
+                {
+                    var log = sp.GetRequiredService<ILogger<DashboardHubService>>();
+                    return new DashboardHubService(hubContext, log);
+                }
+            }
+            catch { /* SignalR not registered in this host (e.g., HO.API) */ }
+
+            return new NullSignalRService();
+        });
 
         // ── Security ─────────────────────────────────────────────────────────
         var jwtSettings = configuration.GetSection("JwtSettings").Get<JwtSettings>()
