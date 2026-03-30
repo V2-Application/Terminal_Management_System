@@ -8,13 +8,24 @@
     <UseWindowsService>true</UseWindowsService>
   </PropertyGroup>
   <ItemGroup>
+    <!-- Windows Service hosting -->
     <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="8.0.0" />
+    <!-- HTTP client (fixes CS1061: AddHttpClient not found) -->
+    <PackageReference Include="Microsoft.Extensions.Http" Version="8.0.0" />
+    <!-- DPAPI / ProtectedData (fixes CS0103: ProtectedData not found) -->
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
+    <!-- WMI for BIOS GUID (machine fingerprint) -->
+    <PackageReference Include="System.Management" Version="8.0.0" />
+    <!-- SQLite local state -->
     <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.0" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.0" />
+    <!-- Logging -->
     <PackageReference Include="Serilog.Extensions.Hosting" Version="8.0.0" />
     <PackageReference Include="Serilog.Sinks.Console" Version="5.0.1" />
     <PackageReference Include="Serilog.Sinks.File" Version="5.0.0" />
+    <!-- Retry policies -->
     <PackageReference Include="Polly" Version="8.3.0" />
+    <PackageReference Include="Microsoft.Extensions.Http.Resilience" Version="8.0.0" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\HO.Contracts\HO.Contracts.csproj" />

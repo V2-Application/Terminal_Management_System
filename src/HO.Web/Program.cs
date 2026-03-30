@@ -1,3 +1,4 @@
+using HO.Infrastructure.AI;
 using HO.Infrastructure.Persistence;
 using HO.Web.Hubs;
 using Microsoft.EntityFrameworkCore;
@@ -11,6 +12,9 @@ builder.Services.AddDbContext<AppDbContext>(opts =>
 // MVC + SignalR
 builder.Services.AddControllersWithViews();
 builder.Services.AddSignalR();
+
+// Claude AI — reads ANTHROPIC_API_KEY from environment or appsettings
+builder.Services.AddClaudeAI(builder.Configuration);
 
 // Cookie Auth
 builder.Services.AddAuthentication("Cookies")
@@ -26,15 +30,9 @@ builder.Services.AddAuthentication("Cookies")
 
 builder.Services.AddAuthorization();
 
-// Hangfire Dashboard (read-only view for SuperAdmin)
-builder.Services.AddHangfireDashboardPassthrough();
-
 var app = builder.Build();
 
-if (!app.Environment.IsDevelopment())
-{
-    app.UseHsts();
-}
+if (!app.Environment.IsDevelopment()) app.UseHsts();
 
 app.UseHttpsRedirection();
 app.UseStaticFiles();
@@ -46,9 +44,3 @@ app.MapControllerRoute("default", "{controller=Dashboard}/{action=Index}/{id?}")
 app.MapHub<DashboardHub>("/hubs/dashboard");
 
 app.Run();
-
-// Temporary placeholder extension
-static class HangfirePassthrough
-{
-    public static IServiceCollection AddHangfireDashboardPassthrough(this IServiceCollection services) => services;
-}

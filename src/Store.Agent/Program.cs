@@ -1,45 +1,72 @@
+using Microsoft.Extensions.DependencyInjection;  // AddHttpClient, AddScoped, etc.
+using Microsoft.Extensions.Hosting;
 using Serilog;
 using Store.Agent;
 using Store.Agent.Execution;
 using Store.Agent.Models;
 using Store.Agent.Security;
 using Store.Agent.Services;
-using Store.Agent.Services;  // LocalStateRepository
 
+// Configure Serilog before host build
 Log.Logger = new LoggerConfiguration()
-    .WriteTo.Console()
-    .WriteTo.File("C:\\RetailTMS\\Logs\\agent-.log", rollingInterval: RollingInterval.Day)
+    .MinimumLevel.Information()
+    .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}")
+    .WriteTo.File(
+        path: @"C:\RetailTMS\Logs\agent-.log",
+        rollingInterval: RollingInterval.Day,
+        retainedFileCountLimit: 30)
     .CreateLogger();
 
-var host = Host.CreateDefaultBuilder(args)
-    .UseWindowsService(opts => opts.ServiceName = "RetailTMS.StoreAgent")
-    .UseSerilog()
-    .ConfigureServices((ctx, services) =>
-    {
-        var agentConfig = ctx.Configuration.GetSection("AgentConfig").Get<AgentConfig>()
-            ?? new AgentConfig();
-        services.AddSingleton(agentConfig);
+try
+{
+    Log.Information("RetailTMS Store Agent starting up");
 
-        // HTTP Client with token handler
-        services.AddHttpClient("HoApi", client =>
+    var host = Host.CreateDefaultBuilder(args)
+        .UseWindowsService(opts => opts.ServiceName = "RetailTMS.StoreAgent")
+        .UseSerilog()
+        .ConfigureServices((ctx, services) =>
         {
-            client.BaseAddress = new Uri(agentConfig.HoApiBaseUrl.TrimEnd('/') + '/');
-            client.Timeout = TimeSpan.FromSeconds(agentConfig.DownloadTimeoutSeconds);
-        });
+            // Bind config
+            var agentConfig = ctx.Configuration
+                .GetSection("AgentConfig")
+                .Get<AgentConfig>() ?? new AgentConfig();
 
-        // Agent services
-        services.AddScoped<HeartbeatService>();
-        services.AddScoped<CommandPollerService>();
-        services.AddScoped<ExecutionService>();
-        services.AddScoped<BillingLockService>();
-        services.AddSingleton<CredentialStore>();
-        services.AddSingleton<LocalStateRepository>();
-        services.AddSingleton<PreFlightChecker>();
-        services.AddSingleton<PackageHashVerifier>();
-        services.AddSingleton<ScriptExecutor>();
+            services.AddSingleton(agentConfig);
 
-        services.AddHostedService<Worker>();
-    })
-    .Build();
+            // --- HTTP Client (Microsoft.Extensions.Http) ---
+            services.AddHttpClient("HoApi", client =>
+            {
+                client.BaseAddress = new Uri(agentConfig.HoApiBaseUrl.TrimEnd('/') + '/');
+                client.Timeout = TimeSpan.FromSeconds(agentConfig.DownloadTimeoutSeconds);
+                client.DefaultRequestHeaders.Add("User-Agent",
+                    $"RetailTMS-Agent/{System.Reflection.Assembly.GetExecutingAssembly().GetName().Version}");
+            });
 
-await host.RunAsync();
+            // --- Core Agent Services ---
+            services.AddSingleton<CredentialStore>();
+            services.AddSingleton<AgentConfig>(agentConfig);
+            services.AddSingleton<LocalStateRepository>();
+            services.AddSingleton<PreFlightChecker>();
+            services.AddSingleton<PackageHashVerifier>();
+            services.AddSingleton<ScriptExecutor>();
+
+            services.AddScoped<HeartbeatService>();
+            services.AddScoped<CommandPollerService>();
+            services.AddScoped<ExecutionService>();
+            services.AddScoped<BillingLockService>();
+
+            // --- Background Worker ---
+            services.AddHostedService<Worker>();
+        })
+        .Build();
+
+    await host.RunAsync();
+}
+catch (Exception ex)
+{
+    Log.Fatal(ex, "Store Agent terminated unexpectedly");
+}
+finally
+{
+    Log.CloseAndFlush();
+}
