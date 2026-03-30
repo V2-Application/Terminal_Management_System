@@ -1,0 +1,344 @@
+@{
+    ViewData["Title"] = "Terminal Simulator";
+    var stores = ViewBag.Stores as IEnumerable<dynamic> ?? Enumerable.Empty<dynamic>();
+    var vTerminals = ViewBag.VirtualTerminals as IEnumerable<HO.Domain.Entities.Terminal>
+                     ?? Enumerable.Empty<HO.Domain.Entities.Terminal>();
+}
+
+<div style="background:#FFF8E1;border:1px solid #FFE082;border-radius:8px;padding:12px 16px;margin-bottom:16px;font-size:13px;border-left:3px solid #F9A825">
+    <strong>⚡ Dev Tool:</strong> Simulate a real store terminal without installing the Store Agent exe.
+    Each step here matches exactly what the real agent does — data appears live on the Dashboard.
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+
+<!-- Left: Step-by-step wizard -->
+<div>
+
+    <!-- STEP 1: Register -->
+    <div style="background:#fff;border:1px solid #E8E8E8;border-radius:10px;margin-bottom:12px;overflow:hidden">
+        <div style="background:#1F3864;padding:10px 16px;display:flex;align-items:center;gap:12px">
+            <span style="width:24px;height:24px;background:#fff;color:#1F3864;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0">1</span>
+            <span style="color:#fff;font-weight:600;font-size:13px">Register a Virtual Terminal</span>
+        </div>
+        <div style="padding:14px 16px">
+            <div style="font-size:12px;color:#888;margin-bottom:10px">
+                Picks a store and creates a virtual terminal in the DB — same as the Store Agent registering for the first time.
+            </div>
+            <div style="margin-bottom:10px">
+                <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px">Select Store *</label>
+                <select id="store-select" style="width:100%;padding:8px 10px;border:1.5px solid #DDD;border-radius:6px;font-size:13px;background:#fff">
+                    <option value="">— Pick a store —</option>
+                    @foreach (var s in stores)
+                    {
+                        <option value="@s.StoreId">@s.StoreCode — @s.StoreName (@s.Region)</option>
+                    }
+                </select>
+            </div>
+            <div style="margin-bottom:12px">
+                <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px">Terminal Label (optional)</label>
+                <input id="terminal-label" placeholder="e.g. ST001-T01 (auto-generated if blank)"
+                       style="width:100%;padding:8px 10px;border:1.5px solid #DDD;border-radius:6px;font-size:13px" />
+            </div>
+            <button onclick="registerTerminal()"
+                    style="width:100%;padding:9px;background:#1F3864;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">
+                ▶ Register Virtual Terminal
+            </button>
+        </div>
+    </div>
+
+    <!-- STEP 2: Heartbeat -->
+    <div style="background:#fff;border:1px solid #E8E8E8;border-radius:10px;margin-bottom:12px;overflow:hidden">
+        <div style="background:#3B6D11;padding:10px 16px;display:flex;align-items:center;gap:12px">
+            <span style="width:24px;height:24px;background:#fff;color:#3B6D11;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0">2</span>
+            <span style="color:#fff;font-weight:600;font-size:13px">Send Heartbeat → Terminal Goes ONLINE</span>
+        </div>
+        <div style="padding:14px 16px">
+            <div style="font-size:12px;color:#888;margin-bottom:10px">
+                Updates LastHeartbeat timestamp and sets status = Active. Terminal appears as ● ONLINE on the dashboard.
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+                <div>
+                    <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px">Disk Free (GB)</label>
+                    <input id="disk-free" type="number" value="85.4" min="1" max="999"
+                           style="width:100%;padding:8px 10px;border:1.5px solid #DDD;border-radius:6px;font-size:13px" />
+                </div>
+                <div>
+                    <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px">POS Process</label>
+                    <select id="pos-running" style="width:100%;padding:8px 10px;border:1.5px solid #DDD;border-radius:6px;font-size:13px;background:#fff">
+                        <option value="true">Running (POS.exe ON)</option>
+                        <option value="false">Stopped (POS.exe OFF)</option>
+                    </select>
+                </div>
+            </div>
+            <div style="display:flex;gap:8px">
+                <button onclick="sendHeartbeat()"
+                        style="flex:1;padding:9px;background:#3B6D11;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">
+                    💓 Send Heartbeat
+                </button>
+                <button onclick="heartbeatAll()"
+                        style="padding:9px 14px;background:#EAF3DE;color:#3B6D11;border:1px solid #C8E6B4;border-radius:6px;font-size:12px;cursor:pointer">
+                    All Terminals
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- STEP 3: Execute Steps -->
+    <div style="background:#fff;border:1px solid #E8E8E8;border-radius:10px;margin-bottom:12px;overflow:hidden">
+        <div style="background:#854F0B;padding:10px 16px;display:flex;align-items:center;gap:12px">
+            <span style="width:24px;height:24px;background:#fff;color:#854F0B;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0">3</span>
+            <span style="color:#fff;font-weight:600;font-size:13px">Simulate Command Execution</span>
+        </div>
+        <div style="padding:14px 16px">
+            <div style="font-size:12px;color:#888;margin-bottom:10px">
+                Simulates the terminal running a BAT script and reporting back. Creates Command + Execution records with realistic output.
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+                <div>
+                    <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px">Command Type</label>
+                    <select id="cmd-type" style="width:100%;padding:8px 10px;border:1.5px solid #DDD;border-radius:6px;font-size:13px;background:#fff">
+                        <option value="NsoSetup">Step 1 — IT NSO Setup</option>
+                        <option value="FyClose" selected>Step 2 — FY-CLOSE.BAT</option>
+                        <option value="TimeSyncTest">Step 3 — Time → Test Server</option>
+                        <option value="TimeSyncProd">Step 4 — Time → Prod Server</option>
+                    </select>
+                </div>
+                <div>
+                    <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px">Result</label>
+                    <select id="cmd-result" style="width:100%;padding:8px 10px;border:1.5px solid #DDD;border-radius:6px;font-size:13px;background:#fff">
+                        <option value="Success">✓ Success (Exit 0)</option>
+                        <option value="Failed">✗ Failed (Exit 1/5/53)</option>
+                    </select>
+                </div>
+            </div>
+            <button onclick="simulateCommand()"
+                    style="width:100%;padding:9px;background:#854F0B;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">
+                ▶ Simulate Command
+            </button>
+        </div>
+    </div>
+
+    <!-- STEP 4: Go Offline -->
+    <div style="background:#fff;border:1px solid #E8E8E8;border-radius:10px;overflow:hidden">
+        <div style="background:#6C757D;padding:10px 16px;display:flex;align-items:center;gap:12px">
+            <span style="width:24px;height:24px;background:#fff;color:#6C757D;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0">4</span>
+            <span style="color:#fff;font-weight:600;font-size:13px">Go Offline (optional)</span>
+        </div>
+        <div style="padding:14px 16px">
+            <div style="font-size:12px;color:#888;margin-bottom:10px">
+                Marks terminal as Offline — tests how the dashboard responds to a terminal dropping out.
+            </div>
+            <button onclick="goOffline()"
+                    style="width:100%;padding:9px;background:#FCEBEB;color:#A32D2D;border:1px solid #F5B8B8;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">
+                ⚡ Mark Terminal Offline
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Right: Status + Log + Links -->
+<div>
+
+    <!-- Active terminal panel -->
+    <div style="background:#fff;border:1px solid #E8E8E8;border-radius:10px;overflow:hidden;margin-bottom:12px">
+        <div style="padding:10px 16px;background:#F8F9FA;border-bottom:1px solid #E8E8E8;font-size:13px;font-weight:600;display:flex;justify-content:space-between;align-items:center">
+            <span>Active Virtual Terminal</span>
+            <span id="term-badge" style="font-size:11px;background:#F0F0F0;color:#888;padding:2px 8px;border-radius:4px">None selected</span>
+        </div>
+        <div id="active-terminal" style="padding:14px 16px;font-size:13px;color:#888">
+            ← Register a terminal on the left to begin
+        </div>
+    </div>
+
+    <!-- Existing virtual terminals -->
+    @if (vTerminals.Any())
+    {
+        <div style="background:#fff;border:1px solid #E8E8E8;border-radius:10px;overflow:hidden;margin-bottom:12px">
+            <div style="padding:10px 16px;background:#F8F9FA;border-bottom:1px solid #E8E8E8;font-size:13px;font-weight:600">
+                Existing Virtual Terminals — click to select
+            </div>
+            <div>
+            @foreach (var t in vTerminals)
+            {
+                var isOnline = t.Status == HO.Domain.Enums.TerminalStatus.Active;
+                <div onclick="selectTerminal('@t.TerminalId','@t.TerminalCode','@t.Store?.StoreCode')"
+                     style="padding:10px 14px;border-bottom:1px solid #F5F5F5;cursor:pointer;display:flex;align-items:center;justify-content:space-between"
+                     onmouseover="this.style.background='#F0F4FF'" onmouseout="this.style.background='#fff'">
+                    <div>
+                        <div style="font-family:monospace;font-weight:600;font-size:12px;color:#1F3864">@t.TerminalCode</div>
+                        <div style="font-size:11px;color:#888">@t.Store?.StoreCode · @t.Store?.StoreName</div>
+                    </div>
+                    <div style="text-align:right">
+                        <div style="font-size:11px;background:@(isOnline?"#EAF3DE":"#FCEBEB");color:@(isOnline?"#3B6D11":"#A32D2D");padding:2px 8px;border-radius:4px;font-weight:500">
+                            @(isOnline ? "● ONLINE" : "● OFFLINE")
+                        </div>
+                        <div style="font-size:10px;color:#AAA;margin-top:2px">
+                            @(t.LastHeartbeat.HasValue ? t.LastHeartbeat.Value.ToString("HH:mm:ss") : "No HB")
+                        </div>
+                    </div>
+                </div>
+            }
+            </div>
+        </div>
+    }
+
+    <!-- Quick navigation -->
+    <div style="background:#fff;border:1px solid #E8E8E8;border-radius:10px;overflow:hidden;margin-bottom:12px">
+        <div style="padding:10px 16px;background:#F8F9FA;border-bottom:1px solid #E8E8E8;font-size:13px;font-weight:600">
+            Check Results On
+        </div>
+        <div style="padding:12px 16px;display:flex;flex-direction:column;gap:8px">
+            <a href="/" style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:#E6F1FB;color:#185FA5;border-radius:6px;font-size:13px;font-weight:500">
+                <span>▦</span> Live Dashboard — see KPI tiles update
+            </a>
+            <a href="/Terminal" style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:#EAF3DE;color:#3B6D11;border-radius:6px;font-size:13px;font-weight:500">
+                <span>◈</span> Terminal Master — see ● ONLINE status
+            </a>
+            <a href="/Store" style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:#F0F0F0;color:#555;border-radius:6px;font-size:13px;font-weight:500">
+                <span>☰</span> Store Master — see FY Close status change
+            </a>
+            <a href="/Audit" style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:#F0F0F0;color:#555;border-radius:6px;font-size:13px;font-weight:500">
+                <span>≡</span> Audit Logs — see all simulator events
+            </a>
+        </div>
+    </div>
+
+    <!-- Activity log -->
+    <div style="background:#0F0F0F;border-radius:10px;overflow:hidden">
+        <div style="padding:10px 16px;border-bottom:1px solid #1A1A1A;display:flex;justify-content:space-between;align-items:center">
+            <span style="font-family:monospace;font-size:12px;color:#72D3A6">// Simulator Log</span>
+            <button onclick="document.getElementById('sim-log').innerHTML='<div style=color:#555>// Log cleared</div>'"
+                    style="font-size:11px;padding:2px 8px;background:#1A1A1A;color:#555;border:1px solid #333;border-radius:4px;cursor:pointer">Clear</button>
+        </div>
+        <div id="sim-log" style="padding:10px 14px;min-height:160px;max-height:320px;overflow-y:auto;font-family:monospace;font-size:12px">
+            <div style="color:#555">// Waiting for actions...</div>
+        </div>
+    </div>
+</div>
+
+</div>
+
+@section Scripts {
+<script>
+let activeTerminalId = null;
+let activeTerminalCode = null;
+
+function selectTerminal(id, code, storeCode) {
+    activeTerminalId = id;
+    activeTerminalCode = code;
+    document.getElementById('term-badge').textContent = code + ' (' + (storeCode||'') + ')';
+    document.getElementById('term-badge').style.background = '#EAF3DE';
+    document.getElementById('term-badge').style.color = '#3B6D11';
+    document.getElementById('active-terminal').innerHTML =
+        '<div style="display:flex;align-items:center;gap:10px">' +
+        '<div style="width:10px;height:10px;background:#3B6D11;border-radius:50%"></div>' +
+        '<div><div style="font-weight:600;color:#1F3864">' + code + '</div>' +
+        '<div style="font-size:11px;color:#888">ID: ' + id.substring(0,8) + '… · Click steps 2-4 now</div></div></div>';
+    simLog('SELECT', 'Working on ' + code + ' (' + id.substring(0,8) + '…)', '#378ADD');
+}
+
+async function registerTerminal() {
+    const storeId = document.getElementById('store-select').value;
+    const label   = document.getElementById('terminal-label').value;
+    if (!storeId) { simLog('ERROR', 'Select a store first', '#F09595'); return; }
+
+    simLog('REGISTER', 'Registering virtual terminal...', '#FAC775');
+    const r = await post('/Simulator/Register', { storeId, terminalLabel: label });
+    if (r.success) {
+        selectTerminal(r.terminalId, r.terminalCode, r.storeCode);
+        simLog('✓ REGISTERED', r.message, '#97C459');
+        simLog('INFO', 'Terminal ID: ' + r.terminalId.substring(0,8) + '…', '#72D3A6');
+        simLog('NEXT', 'Click "Send Heartbeat" to bring it ONLINE', '#378ADD');
+        setTimeout(() => location.reload(), 1500);
+    } else {
+        simLog('ERROR', r.error, '#F09595');
+    }
+}
+
+async function sendHeartbeat() {
+    if (!activeTerminalId) { simLog('ERROR', 'Select a terminal first (Step 1 or click existing)', '#F09595'); return; }
+    const diskFreeGB = +document.getElementById('disk-free').value;
+    const posRunning = document.getElementById('pos-running').value === 'true';
+
+    simLog('HEARTBEAT', 'Sending heartbeat for ' + activeTerminalCode, '#FAC775');
+    const r = await post('/Simulator/Heartbeat', { terminalId: activeTerminalId, diskFreeGB, posRunning });
+    if (r.success) {
+        simLog('✓ ONLINE', r.message, '#97C459');
+        simLog('INFO', 'Last HB: ' + r.lastHeartbeat + ' | Disk: ' + r.diskFreeGB + 'GB', '#72D3A6');
+        simLog('👉 GO TO', 'Dashboard → see Offline count decrease', '#378ADD');
+        updateBadge('ONLINE');
+    } else simLog('ERROR', r.error, '#F09595');
+}
+
+async function heartbeatAll() {
+    simLog('HEARTBEAT', 'Sending heartbeat to ALL virtual terminals...', '#FAC775');
+    const r = await post('/Simulator/HeartbeatAll', {});
+    if (r.success) {
+        simLog('✓ DONE', r.message, '#97C459');
+        simLog('👉 GO TO', 'Dashboard → all virtual terminals now ONLINE', '#378ADD');
+    }
+}
+
+async function simulateCommand() {
+    if (!activeTerminalId) { simLog('ERROR', 'Select a terminal first', '#F09595'); return; }
+    const commandType = document.getElementById('cmd-type').value;
+    const result      = document.getElementById('cmd-result').value;
+
+    simLog('EXECUTE', 'Simulating ' + commandType + ' → ' + result, '#FAC775');
+    const r = await post('/Simulator/SimulateCommand', { terminalId: activeTerminalId, commandType, result });
+    if (r.success) {
+        const color = result === 'Success' ? '#97C459' : '#F09595';
+        simLog(result === 'Success' ? '✓ SUCCESS' : '✗ FAILED', r.message, color);
+        if (r.stdout) simLog('STDOUT', r.stdout, '#9FA8A3');
+        simLog('👉 GO TO', 'Terminal Details → see command in Execution Log', '#378ADD');
+        if (commandType === 'FyClose' && result === 'Success')
+            simLog('👉 GO TO', 'Dashboard → Store FY Status = Completed', '#97C459');
+    } else simLog('ERROR', r.error, '#F09595');
+}
+
+async function goOffline() {
+    if (!activeTerminalId) { simLog('ERROR', 'Select a terminal first', '#F09595'); return; }
+    const r = await post('/Simulator/GoOffline', { terminalId: activeTerminalId });
+    if (r.success) {
+        simLog('⚡ OFFLINE', r.message, '#F09595');
+        simLog('👉 GO TO', 'Dashboard → Offline count increases', '#E67E22');
+        updateBadge('OFFLINE');
+    }
+}
+
+async function post(url, data) {
+    try {
+        const r = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams(data)
+        });
+        return await r.json();
+    } catch(e) {
+        return { success: false, error: e.message };
+    }
+}
+
+function updateBadge(status) {
+    const badge = document.getElementById('term-badge');
+    badge.style.background = status === 'ONLINE' ? '#EAF3DE' : '#FCEBEB';
+    badge.style.color      = status === 'ONLINE' ? '#3B6D11' : '#A32D2D';
+    badge.textContent      = (activeTerminalCode || '?') + ' — ' + status;
+}
+
+function simLog(tag, message, color='#9FA8A3') {
+    const log = document.getElementById('sim-log');
+    const t   = new Date().toLocaleTimeString();
+    const div = document.createElement('div');
+    div.style.cssText = `color:${color};margin-top:3px`;
+    div.innerHTML = `<span style='color:#555'>[${t}]</span> <span style='min-width:80px;display:inline-block;color:#378ADD'>${tag}</span> ${message.replace(/</g,'&lt;')}`;
+    log.appendChild(div);
+    log.scrollTop = log.scrollHeight;
+    // Remove "Waiting..." placeholder
+    const placeholder = log.querySelector('div[style*="#555"]');
+    if (placeholder && placeholder.textContent.includes('Waiting')) placeholder.remove();
+}
+</script>
+@Html.AntiForgeryToken()
+}
