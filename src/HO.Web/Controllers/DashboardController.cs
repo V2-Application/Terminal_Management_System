@@ -10,7 +10,7 @@ namespace HO.Web.Controllers;
 [Authorize]
 public class DashboardController : Controller
 {
-    private readonly IMediator       _mediator;
+    private readonly IMediator        _mediator;
     private readonly IFYJobRepository _fyJobRepo;
 
     public DashboardController(IMediator mediator, IFYJobRepository fyJobRepo)
@@ -21,17 +21,32 @@ public class DashboardController : Controller
 
     public async Task<IActionResult> Index(CancellationToken ct)
     {
-        var activeJob = await _fyJobRepo.GetActiveJobAsync(ct);
-        var summary   = await _mediator.Send(
-            new GetDashboardSummaryQuery(activeJob?.FYJobId), ct);
-        return View(summary);
+        try
+        {
+            var activeJob = await _fyJobRepo.GetActiveJobAsync(ct);
+            var summary   = await _mediator.Send(
+                new GetDashboardSummaryQuery(activeJob?.FYJobId), ct);
+            return View(summary);
+        }
+        catch (Exception ex)
+        {
+            // DB not ready yet — show empty dashboard with a notice
+            TempData["Error"] = "Database is initialising — please refresh in a moment. (" + ex.Message[..Math.Min(100, ex.Message.Length)] + ")";
+            return View(new DashboardSummaryDto());
+        }
     }
 
-    /// <summary>AJAX endpoint — refreshes the KPI summary panel.</summary>
     [HttpGet]
     public async Task<JsonResult> Summary(CancellationToken ct)
     {
-        var summary = await _mediator.Send(new GetDashboardSummaryQuery(null), ct);
-        return Json(summary);
+        try
+        {
+            var summary = await _mediator.Send(new GetDashboardSummaryQuery(null), ct);
+            return Json(summary);
+        }
+        catch
+        {
+            return Json(new DashboardSummaryDto());
+        }
     }
 }
