@@ -1,0 +1,71 @@
+@model HO.Domain.Entities.Store
+@{
+    ViewData["Title"] = Model.StoreName + " — Details";
+    var activeJob = ViewBag.ActiveFYJobId as string;
+}
+
+<div class="row g-3 mb-4">
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">Store Information</div>
+            <div class="card-body">
+                <dl class="row mb-0" style="font-size:13px">
+                    <dt class="col-sm-4">Store Code</dt>
+                    <dd class="col-sm-8 font-monospace">@Model.StoreCode</dd>
+                    <dt class="col-sm-4">Region / Zone</dt>
+                    <dd class="col-sm-8">@Model.Region / @Model.Zone</dd>
+                    <dt class="col-sm-4">Status</dt>
+                    <dd class="col-sm-8"><span class="badge bg-success">@Model.Status</span></dd>
+                    <dt class="col-sm-4">FY Close Status</dt>
+                    <dd class="col-sm-8"><strong>@Model.FYCloseStatus</strong></dd>
+                    <dt class="col-sm-4">Contact</dt>
+                    <dd class="col-sm-8">@(Model.ContactEmail ?? "—")</dd>
+                </dl>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">Terminals</div>
+            <div class="card-body p-0">
+                <table class="table table-sm mb-0">
+                    <thead><tr><th>Code</th><th>Status</th><th>Agent</th><th>Last Seen</th></tr></thead>
+                    <tbody>
+                    @foreach (var t in Model.Terminals)
+                    {
+                        <tr>
+                            <td class="font-monospace small">@t.TerminalCode @(t.IsPrimary?"⭐":"")</td>
+                            <td><span class="badge @(t.Status.ToString()=="Active"?"bg-success":"bg-secondary")">@t.Status</span></td>
+                            <td class="small text-muted">@(t.AgentVersion ?? "—")</td>
+                            <td class="small text-muted">
+                                @(t.LastHeartbeat.HasValue ? t.LastHeartbeat.Value.ToString("HH:mm dd-MMM") : "Never")
+                            </td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (!string.IsNullOrEmpty(activeJob) && Model.FYCloseStatus.ToString() == "Failed")
+{
+    <div class="alert alert-warning d-flex gap-3 align-items-center">
+        <span>This store failed FY-Close execution.</span>
+        <form asp-action="Retry" method="post" class="d-inline">
+            @Html.AntiForgeryToken()
+            @foreach (var t in Model.Terminals.Where(t=>t.IsPrimary))
+            {
+                <input type="hidden" name="commandId" value="@t.TerminalId" />
+            }
+            <button class="btn btn-sm btn-warning">Retry</button>
+        </form>
+        <form asp-action="Rollback" method="post" class="d-inline">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="storeId"  value="@Model.StoreId" />
+            <input type="hidden" name="fyJobId"  value="@activeJob" />
+            <button class="btn btn-sm btn-danger">Rollback</button>
+        </form>
+    </div>
+}

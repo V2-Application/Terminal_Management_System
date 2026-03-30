@@ -1,0 +1,59 @@
+@model IEnumerable<HO.Domain.Entities.Store>
+@{
+    ViewData["Title"] = "Store Master";
+}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <span class="text-muted small">@Model.Count() stores</span>
+    </div>
+    <div class="d-flex gap-2">
+        @foreach (var r in new[]{"All","North","South","East","West","Central"})
+        {
+            <a asp-action="Index" asp-route-region="@(r=="All"?"":r)"
+               class="btn btn-sm @(ViewBag.Region==r||( ViewBag.Region==null&&r=="All")?"btn-primary":"btn-outline-secondary")">@r</a>
+        }
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <table class="table table-hover mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Store ID</th><th>Name</th><th>Region</th><th>Zone</th>
+                    <th>Terminals</th><th>FY Status</th><th>Priority</th><th></th>
+                </tr>
+            </thead>
+            <tbody>
+            @foreach (var store in Model)
+            {
+                <tr onclick="location.href='@Url.Action("Details","Store",new{id=store.StoreId})'" style="cursor:pointer">
+                    <td class="font-monospace fw-semibold" style="font-size:12px">@store.StoreCode</td>
+                    <td>@store.StoreName</td>
+                    <td><span class="badge bg-light text-dark">@store.Region</span></td>
+                    <td class="text-muted small">@store.Zone</td>
+                    <td>@store.Terminals.Count</td>
+                    <td>
+                        @{
+                            var cls = store.FYCloseStatus.ToString() switch {
+                                "Completed" => "status-completed",
+                                "Failed"    => "status-failed",
+                                "Pending"   => "status-pending",
+                                "Offline"   => "status-offline",
+                                _           => "status-pending"
+                            };
+                        }
+                        <span class="status-badge @cls">● @store.FYCloseStatus</span>
+                    </td>
+                    <td class="text-center">
+                        <span class="badge @(store.Priority==1?"bg-danger":store.Priority==2?"bg-warning text-dark":"bg-light text-dark")">
+                            P@store.Priority
+                        </span>
+                    </td>
+                    <td><a class="btn btn-sm btn-outline-secondary" asp-action="Details" asp-route-id="@store.StoreId">Details</a></td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+</div>

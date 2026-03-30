@@ -9,6 +9,7 @@ public interface ICommandRepository
     Task<IEnumerable<Command>> GetPendingForTerminalAsync(Guid terminalId, CancellationToken ct = default);
     Task<IEnumerable<Command>> GetFailedForRetryAsync(DateTime retryBefore, CancellationToken ct = default);
     Task<IEnumerable<Command>> GetByFYJobAsync(Guid fyJobId, CancellationToken ct = default);
+    Task<IEnumerable<Command>> GetRecentAsync(int count = 100, CancellationToken ct = default);
     Task AddAsync(Command command, CancellationToken ct = default);
     Task UpdateAsync(Command command, CancellationToken ct = default);
     Task AddExecutionAsync(CommandExecution execution, CancellationToken ct = default);

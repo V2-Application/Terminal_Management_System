@@ -1,0 +1,37 @@
+@model IEnumerable<HO.Domain.Entities.AuditLog>
+@{
+    ViewData["Title"] = "Audit Logs";
+}
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span>Audit Log — @ViewBag.Total total entries</span>
+        <span class="text-muted small font-monospace">Immutable — INSERT only</span>
+    </div>
+    <div class="card-body" style="background:#0F0F0F;border-radius:0 0 10px 10px;padding:0">
+        <div style="padding:12px;max-height:600px;overflow-y:auto">
+        @foreach (var log in Model)
+        {
+            <div class="d-flex gap-3 mb-1" style="font-size:12px;font-family:Courier New">
+                <span style="color:#378ADD;min-width:140px;flex-shrink:0">@log.Timestamp.ToString("yyyy-MM-dd HH:mm:ss")</span>
+                <span style="color:#72D3A6;min-width:100px;flex-shrink:0">@log.UserId[..Math.Min(20,log.UserId.Length)]</span>
+                <span style="color:@(log.Result=="SUCCESS"?"#97C459":"#F09595");min-width:180px;flex-shrink:0">@log.Action</span>
+                <span style="color:#9FA8A3">@log.EntityType/@log.EntityId @(log.Details != null ? "— " + log.Details[..Math.Min(80,log.Details.Length)] : "")</span>
+            </div>
+        }
+        </div>
+    </div>
+</div>
+
+@if (ViewBag.Pages > 1)
+{
+    <nav class="mt-3">
+        <ul class="pagination pagination-sm">
+            @for (int i = 1; i <= (int)ViewBag.Pages; i++)
+            {
+                <li class="page-item @(i==(int)ViewBag.Page?"active":"")">
+                    <a class="page-link" asp-action="Index" asp-route-page="@i">@i</a>
+                </li>
+            }
+        </ul>
+    </nav>
+}

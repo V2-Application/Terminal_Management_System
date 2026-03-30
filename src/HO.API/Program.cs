@@ -1,25 +1,19 @@
-using HO.Infrastructure.AI;
-using HO.Infrastructure.Persistence;
+using HO.Infrastructure;
 using HO.Infrastructure.Security;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Database
-builder.Services.AddDbContext<AppDbContext>(opts =>
-    opts.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+// Register all infrastructure (DB, repos, services, AI, etc.)
+builder.Services.AddInfrastructure(builder.Configuration);
 
-// JWT Settings
+// JWT Bearer auth for store agents
 var jwtSettings = builder.Configuration.GetSection("JwtSettings").Get<JwtSettings>()
-    ?? throw new InvalidOperationException("JwtSettings not configured in appsettings.json");
-builder.Services.AddSingleton(jwtSettings);
-builder.Services.AddSingleton<JwtService>();
+    ?? throw new InvalidOperationException("JwtSettings not configured.");
 
-// JWT Bearer Auth for store agents
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(opts =>
     {
@@ -38,13 +32,8 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
 builder.Services.AddAuthorization(opts =>
     opts.AddPolicy("TerminalPolicy",
-        policy => policy.RequireClaim("type", "terminal")));
+        p => p.RequireClaim("type", "terminal")));
 
-// HttpClient + Claude AI
-builder.Services.AddHttpClient();
-builder.Services.AddClaudeAI(builder.Configuration);
-
-// API
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
@@ -57,16 +46,19 @@ builder.Services.AddSwaggerGen(c =>
     });
     c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
-        Type        = SecuritySchemeType.Http,
-        Scheme      = "bearer",
+        Type         = SecuritySchemeType.Http,
+        Scheme       = "bearer",
         BearerFormat = "JWT",
-        Description = "Terminal JWT — issued at registration"
+        Description  = "Terminal JWT — issued at registration"
     });
     c.AddSecurityRequirement(new OpenApiSecurityRequirement
     {
         {
-            new OpenApiSecurityScheme { Reference = new OpenApiReference
-                { Type = ReferenceType.SecurityScheme, Id = "Bearer" } },
+            new OpenApiSecurityScheme
+            {
+                Reference = new OpenApiReference
+                    { Type = ReferenceType.SecurityScheme, Id = "Bearer" }
+            },
             Array.Empty<string>()
         }
     });

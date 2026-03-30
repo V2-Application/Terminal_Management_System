@@ -1,35 +1,33 @@
-using HO.Infrastructure.AI;
-using HO.Infrastructure.Persistence;
+using HO.Infrastructure;
 using HO.Web.Hubs;
-using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Database
-builder.Services.AddDbContext<AppDbContext>(opts =>
-    opts.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+// Register all infrastructure (DB, repos, services, AI, SignalR service, etc.)
+builder.Services.AddInfrastructure(builder.Configuration);
 
-// MVC + SignalR
+// MVC
 builder.Services.AddControllersWithViews();
+
+// SignalR hub (browser dashboard real-time)
 builder.Services.AddSignalR();
 
-// HttpClient factory (needed by AI service and other HTTP calls)
-builder.Services.AddHttpClient();
+// MediatR for CQRS queries
+builder.Services.AddMediatR(cfg =>
+    cfg.RegisterServicesFromAssembly(
+        typeof(HO.Application.Queries.Dashboard.GetDashboardSummaryQuery).Assembly));
 
-// Claude AI (reads ANTHROPIC_API_KEY from env var or appsettings)
-builder.Services.AddClaudeAI(builder.Configuration);
-
-// Cookie auth for HO users
+// Cookie auth for HO web users
 builder.Services.AddAuthentication("Cookies")
     .AddCookie("Cookies", opts =>
     {
-        opts.LoginPath  = "/Account/Login";
-        opts.LogoutPath = "/Account/Logout";
+        opts.LoginPath        = "/Account/Login";
+        opts.LogoutPath       = "/Account/Logout";
         opts.SlidingExpiration = true;
-        opts.ExpireTimeSpan = TimeSpan.FromHours(8);
-        opts.Cookie.HttpOnly      = true;
-        opts.Cookie.SecurePolicy  = CookieSecurePolicy.Always;
-        opts.Cookie.SameSite      = SameSiteMode.Strict;
+        opts.ExpireTimeSpan   = TimeSpan.FromHours(8);
+        opts.Cookie.HttpOnly  = true;
+        opts.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+        opts.Cookie.SameSite  = SameSiteMode.Strict;
     });
 
 builder.Services.AddAuthorization();

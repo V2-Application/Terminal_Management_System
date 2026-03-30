@@ -1,0 +1,42 @@
+@model IEnumerable<HO.Domain.Entities.Terminal>
+@{
+    ViewData["Title"] = "Terminal Master";
+}
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span>All Terminals — @Model.Count() registered</span>
+    </div>
+    <div class="card-body p-0">
+        <table class="table table-hover mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Terminal</th><th>Store</th><th>Machine</th><th>IP</th>
+                    <th>Status</th><th>Agent</th><th>Disk</th><th>Last Seen</th>
+                </tr>
+            </thead>
+            <tbody>
+            @foreach (var t in Model)
+            {
+                <tr>
+                    <td class="font-monospace small fw-semibold">
+                        @t.TerminalCode @(t.IsPrimary ? "<span class='badge bg-primary' style='font-size:9px'>PRIMARY</span>" : "")
+                    </td>
+                    <td class="small">@(t.Store?.StoreCode ?? "—")</td>
+                    <td class="small text-muted">@t.MachineName</td>
+                    <td class="small font-monospace text-muted">@(t.IpAddress ?? "—")</td>
+                    <td>
+                        <span class="badge @(t.Status.ToString()=="Active"?"bg-success":t.Status.ToString()=="Offline"?"bg-secondary":"bg-warning text-dark")">
+                            @t.Status
+                        </span>
+                    </td>
+                    <td class="small">@(t.AgentVersion ?? "—")</td>
+                    <td class="small">@(t.DiskFreeGB.HasValue ? t.DiskFreeGB.Value.ToString("F1") + " GB" : "—")</td>
+                    <td class="small text-muted">
+                        @(t.LastHeartbeat.HasValue ? t.LastHeartbeat.Value.ToString("HH:mm dd-MMM") : "Never")
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+</div>
