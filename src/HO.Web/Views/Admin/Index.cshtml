@@ -1,0 +1,888 @@
+@{
+    ViewData["Title"] = "Admin — Configuration & CRUD";
+}
+
+<!-- Tab navigation -->
+<div style="display:flex;gap:0;margin-bottom:0;border-bottom:2px solid #E8E8E8;overflow-x:auto">
+    @{
+        var tabs = new[]{
+            ("stores",    "🏪 Stores"),
+            ("terminals", "🖥️ Terminals"),
+            ("commands",  "⚙ Commands"),
+            ("fyjobs",    "📅 FY Jobs"),
+            ("packages",  "📦 Packages"),
+            ("heartbeats","💓 Heartbeats"),
+            ("audit",     "📋 Audit Logs"),
+        };
+    }
+    @foreach (var (id, label) in tabs)
+    {
+        <button class="tab-btn" data-tab="@id"
+                onclick="switchTab('@id')"
+                style="padding:10px 18px;font-size:13px;font-weight:500;border:none;background:transparent;cursor:pointer;color:#888;white-space:nowrap;border-bottom:2px solid transparent;margin-bottom:-2px">
+            @label
+        </button>
+    }
+</div>
+
+<!-- Summary bar -->
+<div id="summary-bar" style="display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin:14px 0">
+    <div style="background:#F8F9FA;border-radius:7px;padding:10px;text-align:center;border:1px solid #EEE">
+        <div style="font-size:10px;color:#888;text-transform:uppercase;letter-spacing:.05em">Stores</div>
+        <div id="sum-stores" style="font-size:20px;font-weight:700;font-family:monospace;color:#1F3864">—</div>
+    </div>
+    <div style="background:#EAF3DE;border-radius:7px;padding:10px;text-align:center;border:1px solid #C8E6B4">
+        <div style="font-size:10px;color:#3B6D11;text-transform:uppercase;letter-spacing:.05em">Online</div>
+        <div id="sum-online" style="font-size:20px;font-weight:700;font-family:monospace;color:#3B6D11">—</div>
+    </div>
+    <div style="background:#FAEEDA;border-radius:7px;padding:10px;text-align:center;border:1px solid #F0CFA0">
+        <div style="font-size:10px;color:#854F0B;text-transform:uppercase;letter-spacing:.05em">Commands</div>
+        <div id="sum-commands" style="font-size:20px;font-weight:700;font-family:monospace;color:#854F0B">—</div>
+    </div>
+    <div style="background:#FCEBEB;border-radius:7px;padding:10px;text-align:center;border:1px solid #F5B8B8">
+        <div style="font-size:10px;color:#A32D2D;text-transform:uppercase;letter-spacing:.05em">Failed</div>
+        <div id="sum-failed" style="font-size:20px;font-weight:700;font-family:monospace;color:#A32D2D">—</div>
+    </div>
+    <div style="background:#E6F1FB;border-radius:7px;padding:10px;text-align:center;border:1px solid #B5D4F4">
+        <div style="font-size:10px;color:#185FA5;text-transform:uppercase;letter-spacing:.05em">Packages</div>
+        <div id="sum-packages" style="font-size:20px;font-weight:700;font-family:monospace;color:#185FA5">—</div>
+    </div>
+    <div style="background:#F0F0F0;border-radius:7px;padding:10px;text-align:center;border:1px solid #DDD">
+        <div style="font-size:10px;color:#555;text-transform:uppercase;letter-spacing:.05em">Heartbeats 24h</div>
+        <div id="sum-hb" style="font-size:20px;font-weight:700;font-family:monospace;color:#555">—</div>
+    </div>
+</div>
+
+<!-- Toast container -->
+<div id="toast-container" style="position:fixed;top:60px;right:20px;z-index:9999;display:flex;flex-direction:column;gap:8px"></div>
+
+<!-- Modal overlay -->
+<div id="modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:8000;align-items:center;justify-content:center">
+    <div id="modal-box" style="background:#fff;border-radius:12px;padding:24px;min-width:480px;max-width:600px;max-height:80vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.2)">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+            <h3 id="modal-title" style="font-size:16px;font-weight:700;color:#1F3864;margin:0"></h3>
+            <button onclick="closeModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#888;line-height:1">×</button>
+        </div>
+        <div id="modal-body"></div>
+        <div id="modal-footer" style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;padding-top:14px;border-top:1px solid #EEE"></div>
+    </div>
+</div>
+
+<!-- ═══ TAB CONTENT ═══════════════════════════════════════════════════════════ -->
+
+<!-- STORES tab -->
+<div id="tab-stores" class="tab-content" style="display:none">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <input id="store-search" placeholder="Search code / name…" oninput="loadStores()"
+                   style="padding:6px 10px;border:1px solid #DDD;border-radius:6px;font-size:13px;width:180px"/>
+            <select id="store-region" onchange="loadStores()"
+                    style="padding:6px 10px;border:1px solid #DDD;border-radius:6px;font-size:13px">
+                <option value="">All Regions</option>
+                <option>North</option><option>South</option><option>East</option>
+                <option>West</option><option>Central</option>
+            </select>
+            <select id="store-status" onchange="loadStores()"
+                    style="padding:6px 10px;border:1px solid #DDD;border-radius:6px;font-size:13px">
+                <option value="">All Statuses</option>
+                <option>Active</option><option>Inactive</option><option>Decommissioned</option>
+            </select>
+        </div>
+        <button onclick="showCreateStore()"
+                style="padding:7px 16px;background:#185FA5;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">
+            + Add Store
+        </button>
+    </div>
+    <div id="stores-table-wrap" style="background:#fff;border:1px solid #E8E8E8;border-radius:10px;overflow:hidden">
+        <div style="padding:32px;text-align:center;color:#888">Loading...</div>
+    </div>
+    <div id="stores-pagination" style="display:flex;gap:6px;margin-top:10px;justify-content:center"></div>
+</div>
+
+<!-- TERMINALS tab -->
+<div id="tab-terminals" class="tab-content" style="display:none">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <input id="terminal-search" placeholder="Search terminal / machine…" oninput="loadTerminals()"
+                   style="padding:6px 10px;border:1px solid #DDD;border-radius:6px;font-size:13px;width:200px"/>
+            <select id="terminal-status" onchange="loadTerminals()"
+                    style="padding:6px 10px;border:1px solid #DDD;border-radius:6px;font-size:13px">
+                <option value="">All Statuses</option>
+                <option>Active</option><option>Offline</option><option>Registered</option>
+                <option>Locked</option><option>Maintenance</option><option>Error</option>
+            </select>
+        </div>
+        <span style="font-size:12px;color:#888">Click row to edit / change status</span>
+    </div>
+    <div id="terminals-table-wrap" style="background:#fff;border:1px solid #E8E8E8;border-radius:10px;overflow:hidden">
+        <div style="padding:32px;text-align:center;color:#888">Loading...</div>
+    </div>
+    <div id="terminals-pagination" style="display:flex;gap:6px;margin-top:10px;justify-content:center"></div>
+</div>
+
+<!-- COMMANDS tab -->
+<div id="tab-commands" class="tab-content" style="display:none">
+    <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+        <select id="cmd-status" onchange="loadCommands()"
+                style="padding:6px 10px;border:1px solid #DDD;border-radius:6px;font-size:13px">
+            <option value="">All Statuses</option>
+            <option>Queued</option><option>Dispatched</option><option>Running</option>
+            <option>Success</option><option>Failed</option><option>Retrying</option>
+            <option>Cancelled</option><option>RolledBack</option><option>Expired</option>
+        </select>
+        <select id="cmd-type" onchange="loadCommands()"
+                style="padding:6px 10px;border:1px solid #DDD;border-radius:6px;font-size:13px">
+            <option value="">All Types</option>
+            <option>NsoSetup</option><option>FyClose</option>
+            <option>TimeSyncTest</option><option>TimeSyncProd</option>
+            <option>Rollback</option><option>AgentUpdate</option>
+        </select>
+    </div>
+    <div id="commands-table-wrap" style="background:#fff;border:1px solid #E8E8E8;border-radius:10px;overflow:hidden">
+        <div style="padding:32px;text-align:center;color:#888">Loading...</div>
+    </div>
+    <div id="commands-pagination" style="display:flex;gap:6px;margin-top:10px;justify-content:center"></div>
+</div>
+
+<!-- FY JOBS tab -->
+<div id="tab-fyjobs" class="tab-content" style="display:none">
+    <div id="fyjobs-wrap"></div>
+</div>
+
+<!-- PACKAGES tab -->
+<div id="tab-packages" class="tab-content" style="display:none">
+    <div style="display:flex;justify-content:flex-end;margin-bottom:10px">
+        <button onclick="showCreatePackage()"
+                style="padding:7px 16px;background:#185FA5;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">
+            + Add Package
+        </button>
+    </div>
+    <div id="packages-wrap"></div>
+</div>
+
+<!-- HEARTBEATS tab -->
+<div id="tab-heartbeats" class="tab-content" style="display:none">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <span style="font-size:13px;color:#888">Live heartbeat feed — last 50 per page</span>
+        <button onclick="purgeHeartbeats()"
+                style="padding:6px 14px;background:#FCEBEB;color:#A32D2D;border:1px solid #F5B8B8;border-radius:6px;font-size:12px;cursor:pointer">
+            🗑 Purge Old (>30 days)
+        </button>
+    </div>
+    <div id="heartbeats-wrap"></div>
+    <div id="heartbeats-pagination" style="display:flex;gap:6px;margin-top:10px;justify-content:center"></div>
+</div>
+
+<!-- AUDIT tab -->
+<div id="tab-audit" class="tab-content" style="display:none">
+    <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+        <input id="audit-action" placeholder="Action…" oninput="loadAudit()"
+               style="padding:6px 10px;border:1px solid #DDD;border-radius:6px;font-size:13px;width:150px"/>
+        <input id="audit-entity" placeholder="Entity type…" oninput="loadAudit()"
+               style="padding:6px 10px;border:1px solid #DDD;border-radius:6px;font-size:13px;width:150px"/>
+        <input id="audit-user" placeholder="User…" oninput="loadAudit()"
+               style="padding:6px 10px;border:1px solid #DDD;border-radius:6px;font-size:13px;width:150px"/>
+    </div>
+    <div id="audit-wrap" style="background:#0F0F0F;border-radius:10px;overflow:hidden">
+        <div style="padding:14px 16px;border-bottom:1px solid #1A1A1A;display:flex;justify-content:space-between">
+            <span style="font-family:monospace;font-size:12px;color:#72D3A6">// RetailTMS Audit Log</span>
+            <span id="audit-count" style="font-family:monospace;font-size:11px;color:#555"></span>
+        </div>
+        <div id="audit-rows" style="padding:10px 16px;max-height:500px;overflow-y:auto;font-family:monospace;font-size:12px"></div>
+    </div>
+    <div id="audit-pagination" style="display:flex;gap:6px;margin-top:10px;justify-content:center"></div>
+</div>
+
+@section Scripts {
+<script>
+// ── State ────────────────────────────────────────────────────────────────────
+let storesPage = 1, terminalsPage = 1, commandsPage = 1;
+let heartbeatsPage = 1, auditPage = 1;
+const statusColors = {
+    Active:'#3B6D11', Online:'#3B6D11', Success:'#3B6D11', Completed:'#3B6D11',
+    Offline:'#A32D2D', Failed:'#A32D2D', Error:'#A32D2D', Locked:'#A32D2D',
+    Queued:'#854F0B', Running:'#854F0B', Dispatched:'#854F0B', Retrying:'#854F0B',
+    Pending:'#6C757D', Inactive:'#6C757D', Cancelled:'#6C757D', Registered:'#185FA5',
+    Maintenance:'#185FA5', Paused:'#185FA5',
+};
+const statusBgs = {
+    Active:'#EAF3DE', Online:'#EAF3DE', Success:'#EAF3DE', Completed:'#EAF3DE',
+    Offline:'#FCEBEB', Failed:'#FCEBEB', Error:'#FCEBEB', Locked:'#FCEBEB',
+    Queued:'#FAEEDA', Running:'#FAEEDA', Dispatched:'#FAEEDA', Retrying:'#FAEEDA',
+    Pending:'#F0F0F0', Inactive:'#F0F0F0', Cancelled:'#F0F0F0',
+    Registered:'#E6F1FB', Maintenance:'#E6F1FB', Paused:'#E6F1FB',
+};
+function badge(status) {
+    const c = statusColors[status]||'#555', b = statusBgs[status]||'#EEE';
+    return `<span style="background:${b};color:${c};padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;white-space:nowrap">● ${status}</span>`;
+}
+function fmtDate(d) { if(!d) return '—'; const dt=new Date(d); return dt.toLocaleDateString()+' '+dt.toLocaleTimeString(); }
+function fmtSize(b) { if(!b) return '—'; if(b>1e6) return (b/1e6).toFixed(1)+' MB'; return (b/1e3).toFixed(0)+' KB'; }
+
+// ── Toast ─────────────────────────────────────────────────────────────────────
+function toast(msg, type='success') {
+    const div = document.createElement('div');
+    const colors = {success:'#EAF3DE|#3B6D11',error:'#FCEBEB|#A32D2D',info:'#E6F1FB|#185FA5'};
+    const [bg,color] = (colors[type]||colors.info).split('|');
+    div.style.cssText = `background:${bg};color:${color};padding:10px 16px;border-radius:8px;font-size:13px;font-weight:500;box-shadow:0 2px 12px rgba(0,0,0,.15);min-width:240px;border-left:3px solid ${color}`;
+    div.textContent = msg;
+    document.getElementById('toast-container').appendChild(div);
+    setTimeout(() => div.remove(), 3500);
+}
+
+// ── Modal ─────────────────────────────────────────────────────────────────────
+function showModal(title, body, buttons=[]) {
+    document.getElementById('modal-title').textContent = title;
+    document.getElementById('modal-body').innerHTML = body;
+    const footer = document.getElementById('modal-footer');
+    footer.innerHTML = '';
+    buttons.forEach(b => {
+        const btn = document.createElement('button');
+        btn.textContent = b.label;
+        btn.style.cssText = `padding:8px 18px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;border:1px solid transparent;background:${b.bg||'#185FA5'};color:${b.color||'#fff'}`;
+        btn.onclick = b.action;
+        footer.appendChild(btn);
+    });
+    const ov = document.getElementById('modal-overlay');
+    ov.style.display = 'flex';
+}
+function closeModal() { document.getElementById('modal-overlay').style.display = 'none'; }
+
+// ── Tab switching ─────────────────────────────────────────────────────────────
+function switchTab(id) {
+    document.querySelectorAll('.tab-btn').forEach(b => {
+        const on = b.dataset.tab === id;
+        b.style.color = on ? '#185FA5' : '#888';
+        b.style.fontWeight = on ? '600' : '400';
+        b.style.borderBottomColor = on ? '#185FA5' : 'transparent';
+    });
+    document.querySelectorAll('.tab-content').forEach(t => t.style.display = 'none');
+    document.getElementById('tab-' + id).style.display = 'block';
+    const loaders = { stores: loadStores, terminals: loadTerminals, commands: loadCommands,
+        fyjobs: loadFYJobs, packages: loadPackages, heartbeats: loadHeartbeats, audit: loadAudit };
+    loaders[id]?.();
+}
+
+function pagination(total, current, pageSize, onPage) {
+    const pages = Math.ceil(total / pageSize);
+    if (pages <= 1) return '';
+    let html = '';
+    for (let i=1; i<=pages; i++) {
+        const active = i===current;
+        html += `<button onclick="(${onPage})(${i})" style="padding:4px 10px;font-size:12px;border-radius:5px;border:1px solid ${active?'#185FA5':'#DDD'};background:${active?'#185FA5':'#fff'};color:${active?'#fff':'#555'};cursor:pointer">${i}</button>`;
+    }
+    return html;
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// SUMMARY
+// ══════════════════════════════════════════════════════════════════════════════
+async function loadSummary() {
+    const d = await fetch('/Admin/Summary').then(r=>r.json());
+    document.getElementById('sum-stores').textContent   = d.stores.total;
+    document.getElementById('sum-online').textContent   = d.terminals.online;
+    document.getElementById('sum-commands').textContent = d.commands.total;
+    document.getElementById('sum-failed').textContent   = d.commands.failed;
+    document.getElementById('sum-packages').textContent = d.packages.active + ' active';
+    document.getElementById('sum-hb').textContent       = d.heartbeats.last24h;
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// STORES
+// ══════════════════════════════════════════════════════════════════════════════
+async function loadStores(p) {
+    if(p) storesPage = p;
+    const search = document.getElementById('store-search')?.value || '';
+    const region = document.getElementById('store-region')?.value || '';
+    const status = document.getElementById('store-status')?.value || '';
+    const params = new URLSearchParams({ search, region, status, page: storesPage, pageSize: 20 });
+    const d = await fetch('/Admin/Stores?' + params).then(r=>r.json());
+
+    const tbody = d.items.map(s => `
+        <tr style="border-bottom:1px solid #F0F0F0;cursor:pointer" onclick="editStore('${s.storeId}')">
+            <td style="padding:9px 12px;font-family:monospace;font-size:12px;font-weight:600;color:#1F3864">${s.storeCode}</td>
+            <td style="padding:9px 12px;font-size:13px">${s.storeName}</td>
+            <td style="padding:9px 12px"><span style="background:#EEE;color:#555;padding:2px 7px;border-radius:4px;font-size:11px">${s.region}</span></td>
+            <td style="padding:9px 12px;font-size:12px;color:#888">${s.zone}</td>
+            <td style="padding:9px 12px">${badge(s.status)}</td>
+            <td style="padding:9px 12px">${badge(s.fyCloseStatus)}</td>
+            <td style="padding:9px 12px;text-align:center">
+                <span style="font-size:11px;background:${s.activeTerminals>0?'#EAF3DE':'#F0F0F0'};color:${s.activeTerminals>0?'#3B6D11':'#888'};padding:2px 7px;border-radius:4px">
+                    ${s.activeTerminals}/${s.terminalCount}
+                </span>
+            </td>
+            <td style="padding:9px 12px;text-align:center">
+                <span style="background:#F0F4FF;color:#185FA5;padding:2px 7px;border-radius:4px;font-size:11px">P${s.priority}</span>
+            </td>
+            <td style="padding:9px 12px" onclick="event.stopPropagation()">
+                <div style="display:flex;gap:4px;white-space:nowrap">
+                    <button onclick="setStoreStatus('${s.storeId}','${s.storeName}')"
+                            style="padding:3px 8px;font-size:11px;background:#FAEEDA;color:#854F0B;border:none;border-radius:4px;cursor:pointer">Status</button>
+                    <button onclick="editStore('${s.storeId}')"
+                            style="padding:3px 8px;font-size:11px;background:#E6F1FB;color:#185FA5;border:none;border-radius:4px;cursor:pointer">Edit</button>
+                    <button onclick="deleteStore('${s.storeId}','${s.storeName}')"
+                            style="padding:3px 8px;font-size:11px;background:#FCEBEB;color:#A32D2D;border:none;border-radius:4px;cursor:pointer">Delete</button>
+                </div>
+            </td>
+        </tr>`).join('');
+
+    document.getElementById('stores-table-wrap').innerHTML = `
+        <table style="width:100%;border-collapse:collapse">
+            <thead>
+                <tr style="background:#F8F9FA;border-bottom:2px solid #E8E8E8">
+                    <th style="padding:10px 12px;font-size:11px;font-weight:600;color:#888;text-align:left;text-transform:uppercase;letter-spacing:.05em">Code</th>
+                    <th style="padding:10px 12px;font-size:11px;font-weight:600;color:#888;text-align:left;text-transform:uppercase">Name</th>
+                    <th style="padding:10px 12px;font-size:11px;font-weight:600;color:#888;text-align:left;text-transform:uppercase">Region</th>
+                    <th style="padding:10px 12px;font-size:11px;font-weight:600;color:#888;text-align:left;text-transform:uppercase">Zone</th>
+                    <th style="padding:10px 12px;font-size:11px;font-weight:600;color:#888;text-align:left;text-transform:uppercase">Status</th>
+                    <th style="padding:10px 12px;font-size:11px;font-weight:600;color:#888;text-align:left;text-transform:uppercase">FY Status</th>
+                    <th style="padding:10px 12px;font-size:11px;font-weight:600;color:#888;text-align:center;text-transform:uppercase">Terminals</th>
+                    <th style="padding:10px 12px;font-size:11px;font-weight:600;color:#888;text-align:center;text-transform:uppercase">Priority</th>
+                    <th style="padding:10px 12px;font-size:11px;font-weight:600;color:#888;text-align:left;text-transform:uppercase">Actions</th>
+                </tr>
+            </thead>
+            <tbody>${tbody}</tbody>
+        </table>
+        <div style="padding:8px 12px;border-top:1px solid #F0F0F0;font-size:12px;color:#888">${d.total} stores total</div>`;
+    document.getElementById('stores-pagination').innerHTML =
+        pagination(d.total, storesPage, 20, 'loadStores');
+}
+
+async function editStore(id) {
+    const s = await fetch('/Admin/Stores/' + id).then(r=>r.json());
+    showModal('Edit Store — ' + s.storeCode, `
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <div><label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px">Store Code</label>
+                <input id="e-storeCode" value="${s.storeCode}" disabled style="padding:7px 10px;border:1px solid #EEE;border-radius:6px;font-size:13px;width:100%;background:#F8F9FA"></div>
+            <div><label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px">Store Name *</label>
+                <input id="e-storeName" value="${s.storeName||''}" style="padding:7px 10px;border:1.5px solid #DDD;border-radius:6px;font-size:13px;width:100%"></div>
+            <div><label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px">Region *</label>
+                <select id="e-region" style="padding:7px 10px;border:1.5px solid #DDD;border-radius:6px;font-size:13px;width:100%;background:#fff">
+                    ${['North','South','East','West','Central'].map(r=>`<option ${s.region===r?'selected':''}>${r}</option>`).join('')}
+                </select></div>
+            <div><label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px">Zone *</label>
+                <input id="e-zone" value="${s.zone||''}" style="padding:7px 10px;border:1.5px solid #DDD;border-radius:6px;font-size:13px;width:100%"></div>
+            <div><label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px">Priority</label>
+                <select id="e-priority" style="padding:7px 10px;border:1.5px solid #DDD;border-radius:6px;font-size:13px;width:100%;background:#fff">
+                    ${[1,2,3].map(p=>`<option value="${p}" ${s.priority===p?'selected':''}>P${p} — ${p===1?'High':p===2?'Normal':'Low'}</option>`).join('')}
+                </select></div>
+            <div><label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px">Status</label>
+                <select id="e-status" style="padding:7px 10px;border:1.5px solid #DDD;border-radius:6px;font-size:13px;width:100%;background:#fff">
+                    ${['Active','Inactive','Decommissioned'].map(st=>`<option ${s.status===st?'selected':''}>${st}</option>`).join('')}
+                </select></div>
+            <div><label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px">Email</label>
+                <input id="e-email" value="${s.contactEmail||''}" style="padding:7px 10px;border:1.5px solid #DDD;border-radius:6px;font-size:13px;width:100%"></div>
+            <div><label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px">Phone</label>
+                <input id="e-phone" value="${s.contactPhone||''}" style="padding:7px 10px;border:1.5px solid #DDD;border-radius:6px;font-size:13px;width:100%"></div>
+        </div>`,
+    [
+        { label: 'Cancel', bg:'#F0F0F0', color:'#555', action: closeModal },
+        { label: 'Save Changes', action: async () => {
+            const res = await fetch('/Admin/Stores/' + id, {
+                method:'PUT', headers:{'Content-Type':'application/json'},
+                body: JSON.stringify({
+                    storeCode: s.storeCode,
+                    storeName: document.getElementById('e-storeName').value,
+                    region: document.getElementById('e-region').value,
+                    zone: document.getElementById('e-zone').value,
+                    priority: +document.getElementById('e-priority').value,
+                    status: document.getElementById('e-status').value,
+                    contactEmail: document.getElementById('e-email').value,
+                    contactPhone: document.getElementById('e-phone').value,
+                })
+            }).then(r=>r.json());
+            if(res.success) { closeModal(); toast('Store updated ✓'); loadStores(); }
+            else toast(res.error||'Error', 'error');
+        }}
+    ]);
+}
+
+async function setStoreStatus(id, name) {
+    showModal('Change Status — ' + name, `
+        <div style="display:flex;flex-direction:column;gap:12px">
+            <div><label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:5px">Store Status</label>
+                <div style="display:flex;gap:6px;flex-wrap:wrap" id="store-status-btns">
+                    ${['Active','Inactive','Decommissioned'].map(s=>
+                        `<button data-val="${s}" onclick="selectStatus(this,'store-status-btns')"
+                         style="padding:6px 14px;border-radius:6px;border:1.5px solid ${statusColors[s]||'#DDD'};background:#fff;color:${statusColors[s]||'#555'};font-size:13px;cursor:pointer;font-weight:500">${s}</button>`
+                    ).join('')}
+                </div>
+            </div>
+            <div><label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:5px">FY Close Status</label>
+                <div style="display:flex;gap:6px;flex-wrap:wrap" id="fy-status-btns">
+                    ${['Pending','Completed','Failed','Offline','Skipped'].map(s=>
+                        `<button data-val="${s}" onclick="selectStatus(this,'fy-status-btns')"
+                         style="padding:6px 14px;border-radius:6px;border:1.5px solid ${statusColors[s]||'#DDD'};background:#fff;color:${statusColors[s]||'#555'};font-size:13px;cursor:pointer;font-weight:500">${s}</button>`
+                    ).join('')}
+                </div>
+            </div>
+        </div>`,
+    [{label:'Cancel',bg:'#F0F0F0',color:'#555',action:closeModal},{label:'Apply Status',action:async()=>{
+        const s=document.querySelector('#store-status-btns .selected-status')?.dataset.val;
+        const fy=document.querySelector('#fy-status-btns .selected-status')?.dataset.val;
+        if(!s&&!fy){toast('Select at least one status','error');return;}
+        const res=await fetch('/Admin/Stores/'+id+'/status',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:s||'Active',fyCloseStatus:fy})}).then(r=>r.json());
+        if(res.success){closeModal();toast('Status updated ✓');loadStores();}else toast(res.error||'Error','error');
+    }}]);
+}
+
+function selectStatus(btn, groupId) {
+    document.querySelectorAll('#'+groupId+' button').forEach(b=>{
+        b.style.background='#fff'; b.style.fontWeight='500';
+        b.classList.remove('selected-status');
+    });
+    btn.style.background = statusBgs[btn.dataset.val]||'#EEE';
+    btn.style.fontWeight = '700';
+    btn.classList.add('selected-status');
+}
+
+function showCreateStore() {
+    showModal('Add New Store', `
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <div><label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px">Store Code *</label>
+                <input id="n-storeCode" placeholder="e.g. ST056" style="padding:7px 10px;border:1.5px solid #DDD;border-radius:6px;font-size:13px;width:100%"></div>
+            <div><label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px">Store Name *</label>
+                <input id="n-storeName" placeholder="e.g. Park Street Store" style="padding:7px 10px;border:1.5px solid #DDD;border-radius:6px;font-size:13px;width:100%"></div>
+            <div><label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px">Region *</label>
+                <select id="n-region" style="padding:7px 10px;border:1.5px solid #DDD;border-radius:6px;font-size:13px;width:100%;background:#fff">
+                    ${['North','South','East','West','Central'].map(r=>`<option>${r}</option>`).join('')}
+                </select></div>
+            <div><label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px">Zone *</label>
+                <input id="n-zone" placeholder="e.g. Delhi NCR" style="padding:7px 10px;border:1.5px solid #DDD;border-radius:6px;font-size:13px;width:100%"></div>
+            <div><label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px">Priority</label>
+                <select id="n-priority" style="padding:7px 10px;border:1.5px solid #DDD;border-radius:6px;font-size:13px;width:100%;background:#fff">
+                    <option value="1">P1 — High</option><option value="2" selected>P2 — Normal</option><option value="3">P3 — Low</option>
+                </select></div>
+            <div><label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px">Email</label>
+                <input id="n-email" type="email" style="padding:7px 10px;border:1.5px solid #DDD;border-radius:6px;font-size:13px;width:100%"></div>
+            <div><label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px">Phone</label>
+                <input id="n-phone" style="padding:7px 10px;border:1.5px solid #DDD;border-radius:6px;font-size:13px;width:100%"></div>
+        </div>`,
+    [{label:'Cancel',bg:'#F0F0F0',color:'#555',action:closeModal},{label:'Create Store',action:async()=>{
+        const code=document.getElementById('n-storeCode').value;
+        const name=document.getElementById('n-storeName').value;
+        if(!code||!name){toast('Code and Name are required','error');return;}
+        const res=await fetch('/Admin/Stores',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+            storeCode:code,storeName:name,
+            region:document.getElementById('n-region').value,
+            zone:document.getElementById('n-zone').value,
+            priority:+document.getElementById('n-priority').value,
+            status:'Active',
+            contactEmail:document.getElementById('n-email').value,
+            contactPhone:document.getElementById('n-phone').value,
+        })}).then(r=>r.json());
+        if(res.success){closeModal();toast('Store created ✓');loadStores();loadSummary();}
+        else toast(res.error||'Error','error');
+    }}]);
+}
+
+async function deleteStore(id,name) {
+    if(!confirm(`Soft-delete store "${name}"? This hides it from all views.`)) return;
+    const res=await fetch('/Admin/Stores/'+id,{method:'DELETE'}).then(r=>r.json());
+    if(res.success){toast('Store deleted');loadStores();loadSummary();}
+    else toast(res.error||'Error','error');
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// TERMINALS
+// ══════════════════════════════════════════════════════════════════════════════
+async function loadTerminals(p) {
+    if(p) terminalsPage = p;
+    const search = document.getElementById('terminal-search')?.value||'';
+    const status = document.getElementById('terminal-status')?.value||'';
+    const params = new URLSearchParams({search,status,page:terminalsPage,pageSize:20});
+    const d = await fetch('/Admin/Terminals?'+params).then(r=>r.json());
+    const tbody = d.items.map(t=>`
+        <tr style="border-bottom:1px solid #F0F0F0" onclick="editTerminal('${t.terminalId}','${t.terminalCode}')">
+            <td style="padding:9px 12px;font-family:monospace;font-size:12px;font-weight:600;color:#1F3864">${t.terminalCode}</td>
+            <td style="padding:9px 12px;font-size:12px;color:#555">${t.storeCode}</td>
+            <td style="padding:9px 12px;font-size:12px;color:#888">${t.machineName}</td>
+            <td style="padding:9px 12px;font-family:monospace;font-size:11px;color:#888">${t.ipAddress||'—'}</td>
+            <td style="padding:9px 12px">${badge(t.status)}</td>
+            <td style="padding:9px 12px;font-family:monospace;font-size:11px">${t.agentVersion||'—'}</td>
+            <td style="padding:9px 12px;font-size:12px;color:${(t.diskFreeGB||0)<5?'#A32D2D':'#3B6D11'}">${t.diskFreeGB?t.diskFreeGB.toFixed(0)+' GB':'—'}</td>
+            <td style="padding:9px 12px;font-size:11px;color:#888">${t.lastHeartbeat?new Date(t.lastHeartbeat).toLocaleTimeString()+' '+new Date(t.lastHeartbeat).toLocaleDateString():'Never'}</td>
+            <td style="padding:9px 12px;text-align:center"><span style="font-size:11px;color:${t.isPrimary?'#185FA5':'#888'}">${t.isPrimary?'★ Yes':'No'}</span></td>
+            <td style="padding:9px 12px" onclick="event.stopPropagation()">
+                <div style="display:flex;gap:4px">
+                    <button onclick="setTerminalStatus('${t.terminalId}','${t.terminalCode}')"
+                            style="padding:3px 8px;font-size:11px;background:#FAEEDA;color:#854F0B;border:none;border-radius:4px;cursor:pointer">Status</button>
+                    <button onclick="deleteTerminal('${t.terminalId}','${t.terminalCode}')"
+                            style="padding:3px 8px;font-size:11px;background:#FCEBEB;color:#A32D2D;border:none;border-radius:4px;cursor:pointer">Delete</button>
+                </div>
+            </td>
+        </tr>`).join('');
+    document.getElementById('terminals-table-wrap').innerHTML = `
+        <table style="width:100%;border-collapse:collapse">
+            <thead><tr style="background:#F8F9FA;border-bottom:2px solid #E8E8E8">
+                ${['Terminal','Store','Machine','IP','Status','Agent v.','Disk','Last HB','Primary','Actions'].map(h=>`<th style="padding:10px 12px;font-size:11px;font-weight:600;color:#888;text-align:left;text-transform:uppercase;letter-spacing:.05em;white-space:nowrap">${h}</th>`).join('')}
+            </tr></thead>
+            <tbody>${tbody}</tbody>
+        </table>
+        <div style="padding:8px 12px;border-top:1px solid #F0F0F0;font-size:12px;color:#888">${d.total} terminals total</div>`;
+    document.getElementById('terminals-pagination').innerHTML =
+        pagination(d.total, terminalsPage, 20, 'loadTerminals');
+}
+
+async function editTerminal(id,code){
+    const t=await fetch('/Admin/Terminals?page=1&pageSize=200').then(r=>r.json());
+    const term=t.items.find(x=>x.terminalId===id)||{};
+    showModal('Edit Terminal — '+code,`
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <div><label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px">IP Address</label>
+                <input id="t-ip" value="${term.ipAddress||''}" style="padding:7px 10px;border:1.5px solid #DDD;border-radius:6px;font-size:13px;width:100%"></div>
+            <div><label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px">Agent Version</label>
+                <input id="t-agent" value="${term.agentVersion||''}" style="padding:7px 10px;border:1.5px solid #DDD;border-radius:6px;font-size:13px;width:100%"></div>
+            <div><label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px">POS Version</label>
+                <input id="t-pos" value="${term.posVersion||''}" style="padding:7px 10px;border:1.5px solid #DDD;border-radius:6px;font-size:13px;width:100%"></div>
+            <div><label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px">Is Primary Terminal</label>
+                <select id="t-primary" style="padding:7px 10px;border:1.5px solid #DDD;border-radius:6px;font-size:13px;width:100%;background:#fff">
+                    <option value="true" ${term.isPrimary?'selected':''}>Yes — Primary</option>
+                    <option value="false" ${!term.isPrimary?'selected':''}>No — Secondary</option>
+                </select></div>
+        </div>`,
+    [{label:'Cancel',bg:'#F0F0F0',color:'#555',action:closeModal},{label:'Save',action:async()=>{
+        const res=await fetch('/Admin/Terminals/'+id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+            ipAddress:document.getElementById('t-ip').value,
+            agentVersion:document.getElementById('t-agent').value,
+            posVersion:document.getElementById('t-pos').value,
+            isPrimary:document.getElementById('t-primary').value==='true',
+        })}).then(r=>r.json());
+        if(res.success){closeModal();toast('Terminal updated ✓');loadTerminals();}else toast(res.error||'Error','error');
+    }}]);
+}
+
+async function setTerminalStatus(id,code){
+    showModal('Set Terminal Status — '+code,`
+        <div id="terminal-status-btns" style="display:flex;gap:8px;flex-wrap:wrap">
+            ${['Active','Offline','Registered','Maintenance','Locked','Error','Decommissioned'].map(s=>
+                `<button data-val="${s}" onclick="selectStatus(this,'terminal-status-btns')"
+                 style="padding:8px 16px;border-radius:8px;border:2px solid ${statusColors[s]||'#DDD'};background:#fff;color:${statusColors[s]||'#555'};font-size:13px;cursor:pointer;font-weight:500;min-width:100px">${s}</button>`
+            ).join('')}
+        </div>`,
+    [{label:'Cancel',bg:'#F0F0F0',color:'#555',action:closeModal},{label:'Apply',action:async()=>{
+        const s=document.querySelector('#terminal-status-btns .selected-status')?.dataset.val;
+        if(!s){toast('Select a status','error');return;}
+        const res=await fetch('/Admin/Terminals/'+id+'/status',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:s})}).then(r=>r.json());
+        if(res.success){closeModal();toast('Status → '+s+' ✓');loadTerminals();loadSummary();}else toast(res.error,'error');
+    }}]);
+}
+
+async function deleteTerminal(id,code){
+    if(!confirm('Soft-delete terminal "'+code+'"?')) return;
+    const res=await fetch('/Admin/Terminals/'+id,{method:'DELETE'}).then(r=>r.json());
+    if(res.success){toast('Terminal deleted');loadTerminals();}else toast(res.error,'error');
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// COMMANDS
+// ══════════════════════════════════════════════════════════════════════════════
+async function loadCommands(p){
+    if(p) commandsPage=p;
+    const status=document.getElementById('cmd-status')?.value||'';
+    const type=document.getElementById('cmd-type')?.value||'';
+    const params=new URLSearchParams({status,commandType:type,page:commandsPage,pageSize:20});
+    const d=await fetch('/Admin/Commands?'+params).then(r=>r.json());
+    const tbody=d.items.map(c=>`
+        <tr style="border-bottom:1px solid #F0F0F0">
+            <td style="padding:8px 12px;font-family:monospace;font-size:11px;color:#888">${c.commandId.substring(0,8)}…</td>
+            <td style="padding:8px 12px;font-size:12px;font-weight:600;color:#1F3864">${c.storeCode}</td>
+            <td style="padding:8px 12px;font-size:11px"><span style="background:#E6F1FB;color:#185FA5;padding:2px 7px;border-radius:4px">${c.commandType}</span></td>
+            <td style="padding:8px 12px">${badge(c.status)}</td>
+            <td style="padding:8px 12px;text-align:center;font-size:12px">${c.retryCount}/${c.maxRetries}</td>
+            <td style="padding:8px 12px;font-size:11px;color:${c.lastExitCode===0?'#3B6D11':c.lastExitCode!==null?'#A32D2D':'#888'}">${c.lastExitCode!==null?'Exit: '+c.lastExitCode:'—'}</td>
+            <td style="padding:8px 12px;font-size:11px;color:#888">${c.createdAt?new Date(c.createdAt).toLocaleString():''}</td>
+            <td style="padding:8px 12px;font-size:11px;color:#888">${c.completedAt?new Date(c.completedAt).toLocaleTimeString():'—'}</td>
+            <td style="padding:8px 12px">
+                <div style="display:flex;gap:4px">
+                    <button onclick="setCommandStatus('${c.commandId}')"
+                            style="padding:3px 8px;font-size:11px;background:#FAEEDA;color:#854F0B;border:none;border-radius:4px;cursor:pointer">Status</button>
+                    ${c.status==='Queued'||c.status==='Dispatched'?
+                        `<button onclick="cancelCommand('${c.commandId}')"
+                                 style="padding:3px 8px;font-size:11px;background:#FCEBEB;color:#A32D2D;border:none;border-radius:4px;cursor:pointer">Cancel</button>`:''}
+                </div>
+            </td>
+        </tr>`).join('');
+    document.getElementById('commands-table-wrap').innerHTML=`
+        <table style="width:100%;border-collapse:collapse">
+            <thead><tr style="background:#F8F9FA;border-bottom:2px solid #E8E8E8">
+                ${['ID','Store','Type','Status','Retries','Exit','Created','Completed','Actions'].map(h=>`<th style="padding:10px 12px;font-size:11px;font-weight:600;color:#888;text-align:left;text-transform:uppercase;letter-spacing:.05em;white-space:nowrap">${h}</th>`).join('')}
+            </tr></thead><tbody>${tbody}</tbody>
+        </table>
+        <div style="padding:8px 12px;border-top:1px solid #F0F0F0;font-size:12px;color:#888">${d.total} commands total</div>`;
+    document.getElementById('commands-pagination').innerHTML=pagination(d.total,commandsPage,20,'loadCommands');
+}
+
+async function setCommandStatus(id){
+    showModal('Change Command Status',`
+        <div id="cmd-status-btns" style="display:flex;gap:8px;flex-wrap:wrap">
+            ${['Queued','Dispatched','Running','Success','Failed','Retrying','RolledBack','Cancelled','Expired'].map(s=>
+                `<button data-val="${s}" onclick="selectStatus(this,'cmd-status-btns')"
+                 style="padding:7px 14px;border-radius:6px;border:2px solid ${statusColors[s]||'#DDD'};background:#fff;color:${statusColors[s]||'#555'};font-size:12px;cursor:pointer;font-weight:500">${s}</button>`
+            ).join('')}
+        </div>`,
+    [{label:'Cancel',bg:'#F0F0F0',color:'#555',action:closeModal},{label:'Apply',action:async()=>{
+        const s=document.querySelector('#cmd-status-btns .selected-status')?.dataset.val;
+        if(!s){toast('Select a status','error');return;}
+        const res=await fetch('/Admin/Commands/'+id+'/status',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:s})}).then(r=>r.json());
+        if(res.success){closeModal();toast('Command status → '+s);loadCommands();loadSummary();}
+    }}]);
+}
+
+async function cancelCommand(id){
+    if(!confirm('Cancel this command?')) return;
+    const res=await fetch('/Admin/Commands/'+id,{method:'DELETE'}).then(r=>r.json());
+    if(res.success){toast('Command cancelled');loadCommands();}else toast(res.error,'error');
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// FY JOBS
+// ══════════════════════════════════════════════════════════════════════════════
+async function loadFYJobs(){
+    const items=await fetch('/Admin/FYJobs').then(r=>r.json());
+    if(!items.length){document.getElementById('fyjobs-wrap').innerHTML='<div style="padding:40px;text-align:center;color:#888;background:#fff;border-radius:10px;border:1px solid #E8E8E8">No FY jobs created yet. Start one from FY-Close Control.</div>';return;}
+    const cards=items.map(j=>`
+        <div style="background:#fff;border:1px solid #E8E8E8;border-radius:10px;padding:16px;margin-bottom:12px">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
+                <div>
+                    <div style="font-size:17px;font-weight:700;color:#1F3864">${j.fyYear}</div>
+                    <div style="font-size:12px;color:#888;margin-top:2px">Started by ${j.startedBy||'—'} · ${j.startedAt?new Date(j.startedAt).toLocaleString():'Not started'}</div>
+                </div>
+                <div style="display:flex;gap:8px;align-items:center">
+                    ${badge(j.status)}
+                    <button onclick="setFYJobStatus('${j.fyJobId}','${j.fyYear}')"
+                            style="padding:5px 12px;font-size:12px;background:#FAEEDA;color:#854F0B;border:none;border-radius:5px;cursor:pointer;font-weight:500">Change Status</button>
+                </div>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:12px">
+                ${[['Total',j.totalStores||0,'#212529','#F8F9FA'],['Completed',j.completedStores,'#3B6D11','#EAF3DE'],['Failed',j.failedStores,'#A32D2D','#FCEBEB'],['Offline',j.offlineStores,'#5F5E5A','#F1EFE8'],['Progress',j.completionPct+'%','#185FA5','#E6F1FB']].map(([l,v,c,b])=>
+                    `<div style="background:${b};border-radius:6px;padding:8px;text-align:center"><div style="font-size:10px;color:${c};text-transform:uppercase;letter-spacing:.05em">${l}</div><div style="font-size:20px;font-weight:700;color:${c};font-family:monospace">${v}</div></div>`
+                ).join('')}
+            </div>
+            <div style="height:6px;background:#E8E8E8;border-radius:3px;margin-bottom:12px;overflow:hidden">
+                <div style="height:100%;background:#639922;width:${j.completionPct}%;border-radius:3px;transition:width .5s"></div>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;font-size:12px;color:#888">
+                <div>Wave Size: <strong style="color:#555">${j.waveSize} stores</strong></div>
+                <div>Wave Interval: <strong style="color:#555">${j.waveIntervalMinutes} min</strong></div>
+                <div>Phase: <strong style="color:#555">${j.phase}</strong></div>
+                <div>Window Start: <strong style="color:#555">${j.executionWindowStart?new Date(j.executionWindowStart).toLocaleString():'—'}</strong></div>
+                <div>Window End: <strong style="color:#555">${j.executionWindowEnd?new Date(j.executionWindowEnd).toLocaleString():'—'}</strong></div>
+                <div>Package: <strong style="color:#555;font-family:monospace;font-size:11px">${j.scriptPackageId?.substring(0,8)}…</strong></div>
+            </div>
+        </div>`).join('');
+    document.getElementById('fyjobs-wrap').innerHTML=cards;
+}
+
+async function setFYJobStatus(id,year){
+    showModal('Change FY Job Status — '+year,`
+        <div id="fy-job-status-btns" style="display:flex;gap:8px;flex-wrap:wrap">
+            ${['Draft','Running','Paused','Completed','Failed','Cancelled'].map(s=>
+                `<button data-val="${s}" onclick="selectStatus(this,'fy-job-status-btns')"
+                 style="padding:9px 20px;border-radius:8px;border:2px solid ${statusColors[s]||'#DDD'};background:#fff;color:${statusColors[s]||'#555'};font-size:13px;cursor:pointer;font-weight:500;min-width:100px">${s}</button>`
+            ).join('')}
+        </div>`,
+    [{label:'Cancel',bg:'#F0F0F0',color:'#555',action:closeModal},{label:'Apply',action:async()=>{
+        const s=document.querySelector('#fy-job-status-btns .selected-status')?.dataset.val;
+        if(!s){toast('Select a status','error');return;}
+        const res=await fetch('/Admin/FYJobs/'+id+'/status',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:s})}).then(r=>r.json());
+        if(res.success){closeModal();toast('FY Job status → '+s+' ✓');loadFYJobs();}else toast(res.error,'error');
+    }}]);
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// PACKAGES
+// ══════════════════════════════════════════════════════════════════════════════
+async function loadPackages(){
+    const items=await fetch('/Admin/Packages').then(r=>r.json());
+    const rows=items.map(p=>`
+        <tr style="border-bottom:1px solid #F0F0F0">
+            <td style="padding:9px 12px;font-size:13px;font-weight:600;color:#1F3864">${p.packageName}</td>
+            <td style="padding:9px 12px"><span style="background:#E6F1FB;color:#185FA5;padding:2px 7px;border-radius:4px;font-size:11px">${p.stepType}</span></td>
+            <td style="padding:9px 12px;font-family:monospace;font-size:12px">${p.version}</td>
+            <td style="padding:9px 12px;font-size:12px;color:#888">${p.dllVersion||'—'}</td>
+            <td style="padding:9px 12px;font-size:12px;color:#888">${fmtSize(p.fileSize)}</td>
+            <td style="padding:9px 12px;font-size:11px;color:#888">${p.fyYear||'—'}</td>
+            <td style="padding:9px 12px">
+                ${p.isActive?'<span style="background:#EAF3DE;color:#3B6D11;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600">● Active</span>':
+                  p.isRollbackPackage?'<span style="background:#FAEEDA;color:#854F0B;padding:2px 8px;border-radius:4px;font-size:11px">Rollback</span>':
+                  '<span style="background:#F0F0F0;color:#888;padding:2px 8px;border-radius:4px;font-size:11px">Inactive</span>'}
+            </td>
+            <td style="padding:9px 12px;font-size:11px;color:#888">${p.uploadedAt?new Date(p.uploadedAt).toLocaleDateString():''}</td>
+            <td style="padding:9px 12px">
+                <div style="display:flex;gap:4px">
+                    ${!p.isActive?`<button onclick="activatePkg('${p.packageId}')"
+                            style="padding:3px 8px;font-size:11px;background:#EAF3DE;color:#3B6D11;border:none;border-radius:4px;cursor:pointer">Activate</button>`:''}
+                    <button onclick="editPackage('${p.packageId}')"
+                            style="padding:3px 8px;font-size:11px;background:#E6F1FB;color:#185FA5;border:none;border-radius:4px;cursor:pointer">Edit</button>
+                    <button onclick="deletePkg('${p.packageId}','${p.packageName}')"
+                            style="padding:3px 8px;font-size:11px;background:#FCEBEB;color:#A32D2D;border:none;border-radius:4px;cursor:pointer">Delete</button>
+                </div>
+            </td>
+        </tr>`).join('');
+    document.getElementById('packages-wrap').innerHTML=`
+        <div style="background:#fff;border:1px solid #E8E8E8;border-radius:10px;overflow:hidden">
+        <table style="width:100%;border-collapse:collapse">
+            <thead><tr style="background:#F8F9FA;border-bottom:2px solid #E8E8E8">
+                ${['Name','Step Type','Version','DLL Version','Size','FY Year','Status','Uploaded','Actions'].map(h=>`<th style="padding:10px 12px;font-size:11px;font-weight:600;color:#888;text-align:left;text-transform:uppercase;letter-spacing:.05em;white-space:nowrap">${h}</th>`).join('')}
+            </tr></thead>
+            <tbody>${rows}</tbody>
+        </table></div>`;
+}
+
+async function activatePkg(id){
+    const res=await fetch('/Admin/Packages/'+id+'/activate',{method:'PATCH'}).then(r=>r.json());
+    if(res.success){toast('Package activated ✓');loadPackages();}else toast(res.error,'error');
+}
+
+async function deletePkg(id,name){
+    if(!confirm('Delete package "'+name+'"?')) return;
+    const res=await fetch('/Admin/Packages/'+id,{method:'DELETE'}).then(r=>r.json());
+    if(res.success){toast('Package deleted');loadPackages();}else toast(res.error,'error');
+}
+
+function showCreatePackage(){
+    showModal('Add Script Package',`
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <div><label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px">Package Name *</label>
+                <input id="p-name" placeholder="FY2025-DLLs-v4" style="padding:7px 10px;border:1.5px solid #DDD;border-radius:6px;font-size:13px;width:100%"></div>
+            <div><label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px">Step Type *</label>
+                <select id="p-step" style="padding:7px 10px;border:1.5px solid #DDD;border-radius:6px;font-size:13px;width:100%;background:#fff">
+                    <option>FY_CLOSE</option><option>NSO_SETUP</option>
+                    <option>TIME_SYNC_TEST</option><option>TIME_SYNC_PROD</option>
+                </select></div>
+            <div><label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px">Version *</label>
+                <input id="p-version" placeholder="FY2025-v4" style="padding:7px 10px;border:1.5px solid #DDD;border-radius:6px;font-size:13px;width:100%"></div>
+            <div><label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px">DLL Version</label>
+                <input id="p-dllver" placeholder="6.3.4000.1234" style="padding:7px 10px;border:1.5px solid #DDD;border-radius:6px;font-size:13px;width:100%"></div>
+            <div><label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px">FY Year</label>
+                <input id="p-fy" value="FY2025" style="padding:7px 10px;border:1.5px solid #DDD;border-radius:6px;font-size:13px;width:100%"></div>
+            <div><label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px">SHA-256 Hash *</label>
+                <input id="p-hash" placeholder="a3f8c2d1e9b4..." style="padding:7px 10px;border:1.5px solid #DDD;border-radius:6px;font-size:13px;width:100%"></div>
+            <div style="grid-column:span 2"><label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px">Storage Path *</label>
+                <input id="p-path" placeholder="C:\\RetailTMS\\Packages\\FY2025-v4.zip" style="padding:7px 10px;border:1.5px solid #DDD;border-radius:6px;font-size:13px;width:100%"></div>
+            <div style="display:flex;gap:12px;grid-column:span 2">
+                <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
+                    <input type="checkbox" id="p-active"> Set as Active for this FY Year
+                </label>
+                <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
+                    <input type="checkbox" id="p-rollback"> Rollback Package
+                </label>
+            </div>
+        </div>`,
+    [{label:'Cancel',bg:'#F0F0F0',color:'#555',action:closeModal},{label:'Create Package',action:async()=>{
+        const res=await fetch('/Admin/Packages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+            packageName:document.getElementById('p-name').value,
+            stepType:document.getElementById('p-step').value,
+            version:document.getElementById('p-version').value,
+            dllVersion:document.getElementById('p-dllver').value||null,
+            fileSize:0,
+            sha256Hash:document.getElementById('p-hash').value,
+            storagePath:document.getElementById('p-path').value,
+            fyYear:document.getElementById('p-fy').value,
+            isActive:document.getElementById('p-active').checked,
+            isRollbackPackage:document.getElementById('p-rollback').checked,
+        })}).then(r=>r.json());
+        if(res.success){closeModal();toast('Package created ✓');loadPackages();loadSummary();}
+        else toast(res.error||'Error','error');
+    }}]);
+}
+
+async function editPackage(id){
+    const all=await fetch('/Admin/Packages').then(r=>r.json());
+    const p=all.find(x=>x.packageId===id)||{};
+    showModal('Edit Package — '+p.packageName,`
+        <div style="display:flex;flex-direction:column;gap:10px">
+            <div><label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px">Package Name</label>
+                <input id="ep-name" value="${p.packageName||''}" style="padding:7px 10px;border:1.5px solid #DDD;border-radius:6px;font-size:13px;width:100%"></div>
+            <div><label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px">Version</label>
+                <input id="ep-ver" value="${p.version||''}" style="padding:7px 10px;border:1.5px solid #DDD;border-radius:6px;font-size:13px;width:100%"></div>
+            <div><label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px">Storage Path</label>
+                <input id="ep-path" value="${p.storagePath||''}" style="padding:7px 10px;border:1.5px solid #DDD;border-radius:6px;font-size:13px;width:100%"></div>
+            <div style="display:flex;gap:16px">
+                <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
+                    <input type="checkbox" id="ep-active" ${p.isActive?'checked':''}> Is Active
+                </label>
+                <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
+                    <input type="checkbox" id="ep-rollback" ${p.isRollbackPackage?'checked':''}> Is Rollback
+                </label>
+            </div>
+        </div>`,
+    [{label:'Cancel',bg:'#F0F0F0',color:'#555',action:closeModal},{label:'Save',action:async()=>{
+        const res=await fetch('/Admin/Packages/'+id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+            packageName:document.getElementById('ep-name').value,
+            stepType:p.stepType,version:document.getElementById('ep-ver').value,
+            dllVersion:p.dllVersion,fileSize:p.fileSize,sha256Hash:p.sha256Hash,
+            storagePath:document.getElementById('ep-path').value,fyYear:p.fyYear,
+            isActive:document.getElementById('ep-active').checked,
+            isRollbackPackage:document.getElementById('ep-rollback').checked,
+        })}).then(r=>r.json());
+        if(res.success){closeModal();toast('Package updated ✓');loadPackages();}else toast(res.error,'error');
+    }}]);
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// HEARTBEATS
+// ══════════════════════════════════════════════════════════════════════════════
+async function loadHeartbeats(p){
+    if(p) heartbeatsPage=p;
+    const d=await fetch('/Admin/Heartbeats?page='+heartbeatsPage+'&pageSize=50').then(r=>r.json());
+    const rows=d.items.map(h=>`
+        <div style="display:flex;gap:14px;padding:5px 16px;border-bottom:1px solid #1A1A1A;font-size:12px;font-family:monospace">
+            <span style="color:#378ADD;min-width:145px;white-space:nowrap">${new Date(h.receivedAt).toLocaleString()}</span>
+            <span style="color:#C3E88D;min-width:80px">${h.terminalCode}</span>
+            <span style="color:#72D3A6;min-width:60px">${h.storeCode}</span>
+            <span style="color:${h.status==='ACTIVE'?'#97C459':'#F09595'};min-width:60px">${h.status}</span>
+            <span style="color:${(h.diskFreeGB||0)<5?'#F09595':'#9FA8A3'};min-width:60px">${h.diskFreeGB?h.diskFreeGB.toFixed(0)+' GB':'—'}</span>
+            <span style="color:${h.posProcessRunning?'#97C459':'#555'}">${h.posProcessRunning?'POS:ON':'POS:OFF'}</span>
+            <span style="color:#555;min-width:50px">${h.agentVersion||'—'}</span>
+        </div>`).join('');
+    document.getElementById('heartbeats-wrap').innerHTML=`
+        <div style="background:#0F0F0F;border-radius:10px;overflow:hidden">
+            <div style="padding:10px 16px;border-bottom:1px solid #1A1A1A;display:flex;justify-content:space-between;align-items:center">
+                <span style="font-family:monospace;font-size:12px;color:#72D3A6">// Heartbeat Feed</span>
+                <span style="font-family:monospace;font-size:11px;color:#555">${d.total} total records</span>
+            </div>
+            <div style="padding:4px 0;max-height:500px;overflow-y:auto">${rows||'<div style="padding:20px 16px;color:#555;font-family:monospace;font-size:12px">No heartbeats yet</div>'}</div>
+        </div>`;
+    document.getElementById('heartbeats-pagination').innerHTML=pagination(d.total,heartbeatsPage,50,'loadHeartbeats');
+}
+
+async function purgeHeartbeats(){
+    if(!confirm('Purge all heartbeats older than 30 days?')) return;
+    const res=await fetch('/Admin/Heartbeats/purge',{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({olderThanDays:30})}).then(r=>r.json());
+    if(res.success){toast('Purged '+res.deleted+' records');loadHeartbeats();loadSummary();}
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// AUDIT LOGS
+// ══════════════════════════════════════════════════════════════════════════════
+async function loadAudit(p){
+    if(p) auditPage=p;
+    const params=new URLSearchParams({
+        action:document.getElementById('audit-action')?.value||'',
+        entityType:document.getElementById('audit-entity')?.value||'',
+        userId:document.getElementById('audit-user')?.value||'',
+        page:auditPage,pageSize:50,
+    });
+    const d=await fetch('/Admin/AuditLogs?'+params).then(r=>r.json());
+    document.getElementById('audit-count').textContent=d.total+' entries';
+    const rows=d.items.map(a=>`
+        <div style="display:flex;gap:14px;margin-bottom:3px">
+            <span style="color:#378ADD;white-space:nowrap;min-width:145px;font-size:12px">${new Date(a.timestamp).toLocaleString()}</span>
+            <span style="color:#72D3A6;min-width:100px;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${(a.userId||'').substring(0,20)}</span>
+            <span style="color:${a.result==='SUCCESS'?'#97C459':'#F09595'};min-width:200px;font-size:12px;white-space:nowrap">${a.action}</span>
+            <span style="color:#9FA8A3;font-size:12px">${a.entityType}/${a.entityId} ${a.details?'— '+(a.details.length>60?a.details.substring(0,60)+'…':a.details):''}</span>
+        </div>`).join('');
+    document.getElementById('audit-rows').innerHTML=rows||'<div style="color:#555">No entries</div>';
+    document.getElementById('audit-pagination').innerHTML=pagination(d.total,auditPage,50,'loadAudit');
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+window.addEventListener('load', () => {
+    loadSummary();
+    switchTab('stores');
+    setInterval(loadSummary, 30000);
+});
+</script>
+}
