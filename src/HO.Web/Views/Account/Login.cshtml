@@ -8,34 +8,60 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>RetailTMS — Sign In</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/lib/bootstrap/css/bootstrap.min.css" />
 </head>
-<body class="bg-light d-flex align-items-center justify-content-center" style="min-height:100vh">
-    <div style="width:380px">
-        <div class="text-center mb-4">
-            <div class="fw-bold" style="font-size:24px;color:#1F3864">RetailTMS</div>
-            <div class="text-muted small">Head Office Control Panel</div>
+<body style="background:#F0F4F8;min-height:100vh;display:flex;align-items:center;justify-content:center">
+    <div style="width:100%;max-width:380px;padding:20px">
+
+        <div style="text-align:center;margin-bottom:28px">
+            <div style="font-size:28px;font-weight:700;color:#1F3864;letter-spacing:-0.5px">RetailTMS</div>
+            <div style="font-size:13px;color:#888;margin-top:4px">Head Office Control Panel — 500+ Stores</div>
         </div>
-        <div class="card shadow-sm border-0">
-            <div class="card-body p-4">
-                @if (ViewBag.Error != null)
-                {
-                    <div class="alert alert-danger py-2 small">@ViewBag.Error</div>
-                }
-                <form asp-action="Login" method="post">
-                    @Html.AntiForgeryToken()
-                    <input type="hidden" name="returnUrl" value="@ViewBag.ReturnUrl" />
-                    <div class="mb-3">
-                        <label class="form-label small fw-semibold">Username</label>
-                        <input name="username" class="form-control" autofocus required />
-                    </div>
-                    <div class="mb-4">
-                        <label class="form-label small fw-semibold">Password</label>
-                        <input type="password" name="password" class="form-control" required />
-                    </div>
-                    <button class="btn w-100" style="background:#1F3864;color:white">Sign In</button>
-                </form>
-            </div>
+
+        <div style="background:#fff;border-radius:12px;padding:28px;box-shadow:0 2px 16px rgba(0,0,0,.08)">
+
+            @if (ViewBag.Error != null)
+            {
+                <div style="background:#FCEBEB;color:#A32D2D;padding:8px 12px;border-radius:6px;font-size:13px;margin-bottom:16px;border-left:3px solid #E74C3C">
+                    @ViewBag.Error
+                </div>
+            }
+
+            <form asp-action="Login" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="returnUrl" value="@ViewBag.ReturnUrl" />
+
+                <div style="margin-bottom:16px">
+                    <label style="display:block;font-size:12px;font-weight:600;color:#555;margin-bottom:6px">
+                        Username
+                    </label>
+                    <input name="username" type="text" autofocus required
+                           style="width:100%;padding:9px 12px;border:1.5px solid #DDD;border-radius:7px;font-size:14px;outline:none;box-sizing:border-box"
+                           onfocus="this.style.borderColor='#185FA5'"
+                           onblur="this.style.borderColor='#DDD'" />
+                </div>
+
+                <div style="margin-bottom:24px">
+                    <label style="display:block;font-size:12px;font-weight:600;color:#555;margin-bottom:6px">
+                        Password
+                    </label>
+                    <input name="password" type="password" required
+                           style="width:100%;padding:9px 12px;border:1.5px solid #DDD;border-radius:7px;font-size:14px;outline:none;box-sizing:border-box"
+                           onfocus="this.style.borderColor='#185FA5'"
+                           onblur="this.style.borderColor='#DDD'" />
+                </div>
+
+                <button type="submit"
+                        style="width:100%;padding:11px;background:#1F3864;color:#fff;border:none;border-radius:7px;font-size:14px;font-weight:600;cursor:pointer;letter-spacing:.3px"
+                        onmouseover="this.style.background='#2C4F8A'"
+                        onmouseout="this.style.background='#1F3864'">
+                    Sign In
+                </button>
+            </form>
+        </div>
+
+        <div style="text-align:center;margin-top:16px;font-size:11px;color:#AAA">
+            Any username + any password (dev mode)
         </div>
     </div>
 </body>

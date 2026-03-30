@@ -5,78 +5,83 @@
 
 @if (!stores.Any())
 {
-    <div class="text-center py-5 text-muted">
+    <div style="text-align:center;padding:48px;color:#888">
         <div style="font-size:32px;margin-bottom:8px">◎</div>
         <div style="font-size:14px">No stores match the current filter</div>
     </div>
 }
 else
 {
-    <table class="table table-hover mb-0">
-        <thead>
-            <tr>
-                <th style="width:90px">Store ID</th>
-                <th>Store Name</th>
-                <th style="width:80px">Region</th>
-                <th style="width:90px">Zone</th>
-                <th style="width:110px">FY Status</th>
-                <th style="width:100px">Terminals</th>
-                <th style="width:110px">Last Updated</th>
-                <th style="width:120px"></th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var store in stores)
-            {
-                <tr onclick="window.location='/Store/Details/@store.StoreId'">
-                    <td>
-                        <span class="font-monospace fw-semibold" style="font-size:12px">@store.StoreCode</span>
-                    </td>
-                    <td>@store.StoreName</td>
-                    <td>
-                        <span class="badge bg-light text-dark" style="font-size:11px;border:0.5px solid #DDD">
-                            @store.Region
-                        </span>
-                    </td>
-                    <td class="text-muted" style="font-size:12px">@store.Zone</td>
-                    <td>
-                        @{
-                            var sc = store.FYCloseStatus.ToString() switch {
-                                "Completed" => "status-completed",
-                                "Failed"    => "status-failed",
-                                "Offline"   => "status-offline",
-                                "Skipped"   => "status-skipped",
-                                _           => "status-pending"
-                            };
-                        }
-                        <span class="status-badge @sc">● @store.FYCloseStatus</span>
-                    </td>
-                    <td class="text-center">
-                        <span class="badge @(store.Terminals.Any(t=>t.Status==HO.Domain.Enums.TerminalStatus.Active)?"bg-success":"bg-secondary")" style="font-size:11px">
-                            @store.Terminals.Count(t=>t.Status==HO.Domain.Enums.TerminalStatus.Active)/@store.Terminals.Count active
-                        </span>
-                    </td>
-                    <td class="text-muted" style="font-size:11px">
-                        @store.UpdatedAt.ToString("HH:mm dd-MMM")
-                    </td>
-                    <td onclick="event.stopPropagation()">
-                        @if (store.FYCloseStatus == HO.Domain.Enums.FYCloseStatus.Failed)
-                        {
-                            <a href="/Store/Details/@store.StoreId" class="btn btn-sm"
-                               style="font-size:10px;background:#E6F1FB;color:#185FA5;border:none;padding:2px 8px">
-                                Retry ↗
-                            </a>
-                        }
-                        <a href="/Store/Details/@store.StoreId" class="btn btn-sm"
-                           style="font-size:10px;background:#F0F0F0;color:#555;border:none;padding:2px 8px">
-                            Details
-                        </a>
-                    </td>
+    <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+            <thead>
+                <tr style="background:#F8F9FA;border-bottom:2px solid #E8E8E8">
+                    <th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.05em;white-space:nowrap">Store ID</th>
+                    <th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.05em">Store Name</th>
+                    <th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.05em">Region</th>
+                    <th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.05em">Zone</th>
+                    <th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.05em">FY Status</th>
+                    <th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.05em">Terminals</th>
+                    <th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.05em">Last Updated</th>
+                    <th style="padding:10px 14px;width:100px"></th>
                 </tr>
-            }
-        </tbody>
-    </table>
-    <div class="px-3 py-2 border-top text-muted" style="font-size:12px">
-        Showing @stores.Count store@(stores.Count != 1 ? "s" : "")
+            </thead>
+            <tbody>
+                @foreach (var (store, i) in stores.Select((s,i)=>(s,i)))
+                {
+                    var bg = i % 2 == 0 ? "#FFFFFF" : "#FAFAFA";
+                    var statusStyle = store.FYCloseStatus.ToString() switch {
+                        "Completed" => "background:#EAF3DE;color:#3B6D11",
+                        "Failed"    => "background:#FCEBEB;color:#A32D2D",
+                        "Offline"   => "background:#F1EFE8;color:#5F5E5A",
+                        "Skipped"   => "background:#E8F4FD;color:#1A5276",
+                        _           => "background:#F0F0F0;color:#6C757D"
+                    };
+                    var activeCount = store.Terminals.Count(t => t.Status == HO.Domain.Enums.TerminalStatus.Active);
+                    <tr style="background:@bg;border-bottom:1px solid #F0F0F0;cursor:pointer"
+                        onmouseover="this.style.background='#F0F4FF'"
+                        onmouseout="this.style.background='@bg'"
+                        onclick="window.location='/Store/Details/@store.StoreId'">
+                        <td style="padding:9px 14px">
+                            <span style="font-family:monospace;font-size:12px;font-weight:600;color:#1F3864">@store.StoreCode</span>
+                        </td>
+                        <td style="padding:9px 14px;color:#212529">@store.StoreName</td>
+                        <td style="padding:9px 14px">
+                            <span style="font-size:11px;background:#EEE;color:#555;padding:2px 8px;border-radius:4px">@store.Region</span>
+                        </td>
+                        <td style="padding:9px 14px;font-size:12px;color:#888">@store.Zone</td>
+                        <td style="padding:9px 14px">
+                            <span style="@statusStyle;padding:2px 9px;border-radius:4px;font-size:11px;font-weight:500">
+                                ● @store.FYCloseStatus
+                            </span>
+                        </td>
+                        <td style="padding:9px 14px;text-align:center">
+                            @if (activeCount > 0)
+                            {
+                                <span style="font-size:11px;background:#EAF3DE;color:#3B6D11;padding:2px 8px;border-radius:4px">
+                                    @activeCount/@store.Terminals.Count active
+                                </span>
+                            }
+                            else
+                            {
+                                <span style="font-size:11px;color:#888">@store.Terminals.Count total</span>
+                            }
+                        </td>
+                        <td style="padding:9px 14px;font-size:11px;color:#888">
+                            @store.UpdatedAt.ToString("HH:mm dd-MMM")
+                        </td>
+                        <td style="padding:9px 14px" onclick="event.stopPropagation()">
+                            <a href="/Store/Details/@store.StoreId"
+                               style="font-size:11px;padding:3px 10px;background:#F0F0F0;color:#555;border-radius:4px;text-decoration:none;white-space:nowrap">
+                                Details →
+                            </a>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+    <div style="padding:8px 14px;border-top:1px solid #F0F0F0;font-size:12px;color:#888">
+        @stores.Count store@(stores.Count != 1 ? "s" : "")
     </div>
 }

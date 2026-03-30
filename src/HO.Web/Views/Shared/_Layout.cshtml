@@ -4,85 +4,100 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1.0" />
     <title>@ViewData["Title"] — RetailTMS</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
-          integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN"
-          crossorigin="anonymous" />
+    <!-- Bootstrap local (run 'dotnet tool run libman restore' OR download manually — see docs/RUNNING_LOCALLY.md) -->
+    <link rel="stylesheet" href="~/lib/bootstrap/css/bootstrap.min.css" />
+    <!-- Fallback: if local not found, use CDN -->
+    <script>
+        (function(){
+            var sheets = document.styleSheets;
+            var found = false;
+            try { for(var i=0;i<sheets.length;i++){ if(sheets[i].href && sheets[i].href.includes('bootstrap')) found=true; } } catch(e){}
+            if(!found){
+                var link=document.createElement('link');
+                link.rel='stylesheet';
+                link.href='https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css';
+                document.head.appendChild(link);
+            }
+        })();
+    </script>
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
 </head>
 <body style="background:#F5F7FA">
 <div class="d-flex" style="min-height:100vh">
 
     <!-- ── Sidebar ── -->
-    <nav class="d-flex flex-column flex-shrink-0 bg-white border-end"
-         style="width:210px;min-height:100vh">
+    <nav style="width:210px;min-width:210px;min-height:100vh;background:#ffffff;border-right:1px solid #E8E8E8;display:flex;flex-direction:column">
 
-        <div class="p-3 border-bottom">
-            <div style="font-size:10px;color:#9E9E9E;font-weight:600;letter-spacing:.08em;text-transform:uppercase">Retail Network</div>
-            <div style="font-size:16px;font-weight:700;color:#1F3864">RetailTMS</div>
+        <div style="padding:14px 16px 10px;border-bottom:1px solid #E8E8E8">
+            <div style="font-size:10px;color:#9E9E9E;font-weight:700;letter-spacing:.1em;text-transform:uppercase">Retail Network</div>
+            <div style="font-size:16px;font-weight:700;color:#1F3864;margin-top:2px">RetailTMS</div>
             <div style="font-size:11px;color:#9E9E9E">Head Office Control Panel</div>
         </div>
 
         @{
-            string active = ViewContext.RouteData.Values["controller"]?.ToString() ?? "";
-            string NavItem(string ctrl, string icon, string label) {
-                bool on = active.Equals(ctrl, StringComparison.OrdinalIgnoreCase);
-                string style = on
-                    ? "display:flex;gap:10px;align-items:center;padding:9px 16px;text-decoration:none;font-size:13px;color:#185FA5;font-weight:500;background:#EBF3FB;border-left:3px solid #185FA5;"
-                    : "display:flex;gap:10px;align-items:center;padding:9px 16px;text-decoration:none;font-size:13px;color:#6C757D;border-left:3px solid transparent;";
-                return $"<a href='/{ctrl}' style='{style}'><span style='width:16px;text-align:center'>{icon}</span>{label}</a>";
+            string ctrl = ViewContext.RouteData.Values["controller"]?.ToString() ?? "";
+            string NavA(string c, string icon, string label)
+            {
+                bool on = ctrl.Equals(c, StringComparison.OrdinalIgnoreCase);
+                return on
+                    ? $"<a href='/{c}' style='display:flex;gap:10px;align-items:center;padding:9px 16px;text-decoration:none;font-size:13px;color:#185FA5;font-weight:600;background:#EBF3FB;border-left:3px solid #185FA5;'><span style='width:18px;text-align:center;font-size:15px'>{icon}</span>{label}</a>"
+                    : $"<a href='/{c}' style='display:flex;gap:10px;align-items:center;padding:9px 16px;text-decoration:none;font-size:13px;color:#6C757D;border-left:3px solid transparent;'><span style='width:18px;text-align:center;font-size:15px'>{icon}</span>{label}</a>";
             }
         }
-        <div class="flex-grow-1 py-1">
-            @Html.Raw(NavItem("Dashboard",  "▦", "Dashboard"))
-            @Html.Raw(NavItem("FYClose",    "⚙", "FY-Close Control"))
-            @Html.Raw(NavItem("Store",      "☰", "Store Master"))
-            @Html.Raw(NavItem("Terminal",   "◈", "Terminals"))
-            @Html.Raw(NavItem("Audit",      "≡", "Audit Logs"))
+
+        <div style="flex:1;padding:6px 0">
+            @Html.Raw(NavA("Dashboard", "▦", "Dashboard"))
+            @Html.Raw(NavA("FYClose",   "⚙", "FY-Close Control"))
+            @Html.Raw(NavA("Store",     "☰", "Store Master"))
+            @Html.Raw(NavA("Terminal",  "◈", "Terminals"))
+            @Html.Raw(NavA("Audit",     "≡", "Audit Logs"))
         </div>
 
-        <div class="p-3 border-top">
+        <div style="padding:10px 14px;border-top:1px solid #E8E8E8">
             <div style="font-size:11px;color:#9E9E9E">@User.Identity?.Name</div>
             <a asp-controller="Account" asp-action="Logout"
                style="font-size:11px;color:#dc3545;text-decoration:none">Sign out</a>
         </div>
     </nav>
 
-    <!-- ── Main ── -->
-    <div class="d-flex flex-column flex-grow-1" style="overflow:hidden">
+    <!-- ── Main area ── -->
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden">
 
         <!-- Topbar -->
-        <div class="border-bottom bg-white d-flex align-items-center justify-content-between px-4 flex-shrink-0"
-             style="height:48px">
-            <span style="font-size:14px;font-weight:500;color:#1F3864">@ViewData["Title"]</span>
-            <span class="text-muted" style="font-size:11px;font-family:monospace">RetailTMS v1.0 | FY2025</span>
+        <div style="height:48px;background:#fff;border-bottom:1px solid #E8E8E8;padding:0 24px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
+            <span style="font-size:14px;font-weight:600;color:#1F3864">@ViewData["Title"]</span>
+            <span style="font-size:11px;color:#9E9E9E;font-family:monospace">RetailTMS v1.0 | FY2025</span>
         </div>
 
-        <!-- Flash messages -->
         @if (TempData["Success"] != null)
         {
-            <div class="alert alert-success alert-dismissible mx-4 mt-3 mb-0 py-2" style="font-size:13px">
+            <div style="margin:12px 20px 0;padding:8px 14px;background:#EAF3DE;color:#3B6D11;border-radius:6px;font-size:13px;border-left:3px solid #639922">
                 @TempData["Success"]
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
             </div>
         }
         @if (TempData["Error"] != null)
         {
-            <div class="alert alert-danger alert-dismissible mx-4 mt-3 mb-0 py-2" style="font-size:13px">
+            <div style="margin:12px 20px 0;padding:8px 14px;background:#FCEBEB;color:#A32D2D;border-radius:6px;font-size:13px;border-left:3px solid #E74C3C">
                 @TempData["Error"]
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
             </div>
         }
 
         <!-- Page content -->
-        <main class="p-4 flex-grow-1" style="overflow:auto">
+        <main style="flex:1;overflow:auto;padding:20px 24px">
             @RenderBody()
         </main>
     </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"
-        integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL"
-        crossorigin="anonymous"></script>
+<!-- Bootstrap JS: local first, CDN fallback -->
+<script src="~/lib/bootstrap/js/bootstrap.bundle.min.js"></script>
+<script>
+    if(typeof bootstrap==='undefined'){
+        var s=document.createElement('script');
+        s.src='https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js';
+        document.head.appendChild(s);
+    }
+</script>
 @await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>
