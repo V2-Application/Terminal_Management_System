@@ -2,60 +2,470 @@
 @{
     ViewData["Title"] = "Store Master";
     var storeList = Model.ToList();
+    var antiForgeryToken = @Html.AntiForgeryToken();
 }
 
-<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-    <span style="color:#888;font-size:13px">@storeList.Count stores registered</span>
-    <div style="display:flex;gap:6px;flex-wrap:wrap">
-        @foreach (var r in new[]{"","North","South","East","West","Central"})
-        {
-            var isActive = r == "" ? ViewBag.Region == null || ViewBag.Region == ""
-                                   : ViewBag.Region == r;
-            <a asp-action="Index" asp-route-region="@r"
-               style="padding:4px 12px;font-size:12px;border-radius:20px;border:1px solid @(isActive?"#185FA5":"#DDD");background:@(isActive?"#185FA5":"#fff");color:@(isActive?"#fff":"#555")">
-                @(r == "" ? "All" : r)
-            </a>
-        }
+<style>
+.store-modal-mask{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:5000;align-items:center;justify-content:center}
+.store-modal-mask.open{display:flex}
+.store-modal{background:#fff;border-radius:12px;padding:28px;width:580px;max-width:95vw;max-height:88vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.25)}
+.sform-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.sform-field label{display:block;font-size:12px;font-weight:600;color:#444;margin-bottom:5px;text-transform:uppercase;letter-spacing:.04em}
+.sform-field input,.sform-field select{width:100%;padding:9px 12px;border:1.5px solid #E0E0E0;border-radius:7px;font-size:13px;background:#fff;outline:none;transition:border-color .15s}
+.sform-field input:focus,.sform-field select:focus{border-color:#185FA5;box-shadow:0 0 0 3px rgba(24,95,165,.1)}
+.sform-field.full{grid-column:span 2}
+.pill{display:inline-block;padding:2px 9px;border-radius:4px;font-size:11px;font-weight:600}
+.pill-active{background:#EAF3DE;color:#3B6D11}
+.pill-pending{background:#F0F0F0;color:#6C757D}
+.pill-completed{background:#EAF3DE;color:#3B6D11}
+.pill-failed{background:#FCEBEB;color:#A32D2D}
+.pill-offline{background:#F1EFE8;color:#5F5E5A}
+.pill-inactive{background:#F0F0F0;color:#888}
+.pill-p1{background:#FCEBEB;color:#A32D2D}
+.pill-p2{background:#FAEEDA;color:#854F0B}
+.pill-p3{background:#F0F0F0;color:#555}
+.store-row:hover{background:#F5F8FF!important;cursor:pointer}
+.saction-btn{padding:3px 8px;font-size:11px;border:none;border-radius:4px;cursor:pointer;font-weight:500;margin-left:2px}
+.toast-box{position:fixed;top:60px;right:18px;z-index:9999;display:flex;flex-direction:column;gap:6px}
+.toast-item{padding:10px 16px;border-radius:8px;font-size:13px;font-weight:500;box-shadow:0 2px 12px rgba(0,0,0,.15);min-width:240px;animation:slideIn .2s ease}
+@keyframes slideIn{from{transform:translateX(100%);opacity:0}to{transform:none;opacity:1}}
+</style>
+
+<!-- Toast notifications -->
+<div class="toast-box" id="toasts"></div>
+
+<!-- ═══ ADD / EDIT MODAL ═══════════════════════════════════════════════════ -->
+<div class="store-modal-mask" id="store-modal">
+  <div class="store-modal">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+      <h3 id="modal-title" style="font-size:17px;font-weight:700;color:#1F3864;margin:0"></h3>
+      <button onclick="closeModal()" style="background:none;border:none;font-size:24px;cursor:pointer;color:#AAA;line-height:1">×</button>
     </div>
+
+    <form id="store-form" onsubmit="submitStoreForm(event)">
+      <input type="hidden" id="f-storeId" />
+      <input type="hidden" id="f-mode" value="create" />
+
+      <div class="sform-grid">
+        <div class="sform-field">
+          <label>Store Code *</label>
+          <input id="f-storeCode" placeholder="e.g. ST056" maxlength="20" required />
+        </div>
+        <div class="sform-field">
+          <label>Store Name *</label>
+          <input id="f-storeName" placeholder="e.g. Park Street Store" maxlength="100" required />
+        </div>
+        <div class="sform-field">
+          <label>Region *</label>
+          <select id="f-region">
+            <option>North</option><option>South</option>
+            <option>East</option><option>West</option><option>Central</option>
+          </select>
+        </div>
+        <div class="sform-field">
+          <label>Zone</label>
+          <input id="f-zone" placeholder="e.g. Delhi NCR" />
+        </div>
+        <div class="sform-field">
+          <label>Priority</label>
+          <select id="f-priority">
+            <option value="1">P1 — High (First wave)</option>
+            <option value="2" selected>P2 — Normal</option>
+            <option value="3">P3 — Low (Last wave)</option>
+          </select>
+        </div>
+        <div class="sform-field" id="f-status-wrap" style="display:none">
+          <label>Store Status</label>
+          <select id="f-status">
+            <option>Active</option>
+            <option>Inactive</option>
+            <option>Decommissioned</option>
+          </select>
+        </div>
+        <div class="sform-field" id="f-fystatus-wrap" style="display:none">
+          <label>FY Close Status</label>
+          <select id="f-fystatus">
+            <option>Pending</option>
+            <option>Completed</option>
+            <option>Failed</option>
+            <option>Offline</option>
+            <option>Skipped</option>
+          </select>
+        </div>
+        <div class="sform-field">
+          <label>Contact Email</label>
+          <input id="f-email" type="email" placeholder="store@retailtms.in" />
+        </div>
+        <div class="sform-field">
+          <label>Contact Phone</label>
+          <input id="f-phone" placeholder="9xxxxxxxxx" maxlength="15" />
+        </div>
+        <div class="sform-field full" id="f-code-note" style="background:#EBF3FB;border-radius:6px;padding:8px 12px;font-size:12px;color:#185FA5">
+          💡 Store Code is auto-uppercased and must be unique (e.g. ST056).
+          It cannot be changed after creation.
+        </div>
+      </div>
+
+      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;padding-top:16px;border-top:1px solid #F0F0F0">
+        <button type="button" onclick="closeModal()"
+                style="padding:9px 20px;background:#EEE;color:#555;border:none;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer">
+          Cancel
+        </button>
+        <button type="submit" id="modal-save-btn"
+                style="padding:9px 24px;background:#185FA5;color:#fff;border:none;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer">
+          Save Store
+        </button>
+      </div>
+    </form>
+  </div>
 </div>
 
-<div class="card">
-    <div class="p-0">
-        <table>
-            <thead>
-                <tr>
-                    <th>Store ID</th><th>Name</th><th>Region</th><th>Zone</th>
-                    <th>FY Status</th><th>Terminals</th><th>Priority</th><th></th>
-                </tr>
-            </thead>
-            <tbody>
-            @foreach (var store in storeList)
-            {
-                var sc = store.FYCloseStatus.ToString() switch {
-                    "Completed" => "status-completed",
-                    "Failed"    => "status-failed",
-                    "Offline"   => "status-offline",
-                    _           => "status-pending"
-                };
-                <tr onclick="location.href='/Store/Details/@store.StoreId'" style="cursor:pointer">
-                    <td><span style="font-family:monospace;font-weight:600;font-size:12px;color:#1F3864">@store.StoreCode</span></td>
-                    <td>@store.StoreName</td>
-                    <td><span style="font-size:11px;background:#EEE;color:#555;padding:2px 7px;border-radius:4px">@store.Region</span></td>
-                    <td style="font-size:12px;color:#888">@store.Zone</td>
-                    <td><span class="badge @sc">● @store.FYCloseStatus</span></td>
-                    <td style="text-align:center;font-size:12px;color:#555">@store.Terminals.Count</td>
-                    <td style="text-align:center">
-                        <span style="font-size:11px;padding:2px 7px;border-radius:4px;background:@(store.Priority==1?"#FCEBEB":store.Priority==2?"#FAEEDA":"#F0F0F0");color:@(store.Priority==1?"#A32D2D":store.Priority==2?"#854F0B":"#555")">
-                            P@store.Priority
-                        </span>
-                    </td>
-                    <td onclick="event.stopPropagation()">
-                        <a href="/Store/Details/@store.StoreId"
-                           style="font-size:11px;padding:3px 8px;background:#F0F0F0;color:#555;border-radius:4px">Details →</a>
-                    </td>
-                </tr>
-            }
-            </tbody>
-        </table>
+<!-- ═══ DELETE CONFIRM MODAL ═══════════════════════════════════════════════ -->
+<div class="store-modal-mask" id="delete-modal">
+  <div class="store-modal" style="max-width:420px">
+    <div style="text-align:center;padding:8px 0 16px">
+      <div style="font-size:40px;margin-bottom:12px">🗑</div>
+      <h3 style="font-size:17px;font-weight:700;color:#1F3864;margin:0 0 8px">Decommission Store?</h3>
+      <p id="delete-confirm-text" style="font-size:14px;color:#666;line-height:1.5"></p>
+      <p style="font-size:12px;color:#888;margin-top:8px">
+        This is a soft delete — the store will be marked as Decommissioned
+        and hidden from active views. It can be reactivated from Admin panel.
+      </p>
     </div>
+    <div style="display:flex;gap:10px;justify-content:center;margin-top:16px">
+      <button onclick="document.getElementById('delete-modal').classList.remove('open')"
+              style="padding:9px 24px;background:#EEE;color:#555;border:none;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer">
+        Cancel
+      </button>
+      <button id="confirm-delete-btn"
+              style="padding:9px 24px;background:#A32D2D;color:#fff;border:none;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer">
+        Yes, Decommission
+      </button>
+    </div>
+  </div>
 </div>
+
+<!-- ═══ PAGE HEADER ═════════════════════════════════════════════════════════ -->
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+  <div>
+    <span id="store-count-label" style="font-size:13px;color:#888">@storeList.Count stores registered</span>
+  </div>
+  <div style="display:flex;gap:8px;align-items:center">
+    <!-- Search -->
+    <input id="search-input" placeholder="🔍 Search code / name…"
+           oninput="filterTable()"
+           style="padding:7px 12px;border:1.5px solid #DDD;border-radius:7px;font-size:13px;width:200px;outline:none"/>
+    <!-- Region filters -->
+    @foreach (var r in new[]{"","North","South","East","West","Central"})
+    {
+        <a href="?region=@r"
+           style="padding:5px 12px;font-size:12px;border-radius:20px;border:1px solid @(ViewBag.Region==r||(r==""&&ViewBag.Region==null)?"#185FA5":"#DDD");background:@(ViewBag.Region==r||(r==""&&ViewBag.Region==null)?"#185FA5":"#fff");color:@(ViewBag.Region==r||(r==""&&ViewBag.Region==null)?"#fff":"#555");text-decoration:none">
+            @(r == "" ? "All" : r)
+        </a>
+    }
+    <!-- Add Store button -->
+    <button onclick="openCreate()"
+            style="padding:7px 16px;background:#185FA5;color:#fff;border:none;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer">
+        + Add Store
+    </button>
+  </div>
+</div>
+
+<!-- ═══ STORE TABLE ══════════════════════════════════════════════════════════ -->
+<div style="background:#fff;border:1px solid #E8E8E8;border-radius:10px;overflow:hidden">
+  <table style="width:100%;border-collapse:collapse" id="store-table">
+    <thead>
+      <tr style="background:#F8F9FA;border-bottom:2px solid #E8E8E8">
+        <th style="padding:10px 12px;font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.05em;text-align:left">Store ID</th>
+        <th style="padding:10px 12px;font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.05em;text-align:left">Name</th>
+        <th style="padding:10px 12px;font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.05em;text-align:left">Region</th>
+        <th style="padding:10px 12px;font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.05em;text-align:left">Zone</th>
+        <th style="padding:10px 12px;font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.05em;text-align:left">FY Status</th>
+        <th style="padding:10px 12px;font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.05em;text-align:center">Terminals</th>
+        <th style="padding:10px 12px;font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.05em;text-align:center">Priority</th>
+        <th style="padding:10px 12px;font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.05em;text-align:left">Actions</th>
+      </tr>
+    </thead>
+    <tbody id="store-tbody">
+    @foreach (var store in storeList)
+    {
+        var fyClass = store.FYCloseStatus.ToString().ToLower();
+        var priClass = "p" + store.Priority;
+        <tr class="store-row"
+            data-search="@store.StoreCode @store.StoreName @store.Region @store.Zone"
+            data-storeid="@store.StoreId"
+            onclick="window.location='/Store/Details/@store.StoreId'"
+            style="border-bottom:1px solid #F0F0F0">
+            <td style="padding:9px 12px">
+                <span style="font-family:monospace;font-weight:600;font-size:12px;color:#1F3864">@store.StoreCode</span>
+            </td>
+            <td style="padding:9px 12px;font-size:13px;color:#212529">@store.StoreName</td>
+            <td style="padding:9px 12px">
+                <span style="background:#EEE;color:#555;padding:2px 7px;border-radius:4px;font-size:11px">@store.Region</span>
+            </td>
+            <td style="padding:9px 12px;font-size:12px;color:#888">@store.Zone</td>
+            <td style="padding:9px 12px">
+                <span class="pill pill-@fyClass">● @store.FYCloseStatus</span>
+            </td>
+            <td style="padding:9px 12px;text-align:center">
+                <span style="font-size:12px;background:@(store.Terminals.Any(t=>t.Status==HO.Domain.Enums.TerminalStatus.Active)?"#EAF3DE":"#EEE");color:@(store.Terminals.Any(t=>t.Status==HO.Domain.Enums.TerminalStatus.Active)?"#3B6D11":"#888");padding:2px 7px;border-radius:4px">
+                    @store.Terminals.Count(t=>t.Status==HO.Domain.Enums.TerminalStatus.Active)/@store.Terminals.Count
+                </span>
+            </td>
+            <td style="padding:9px 12px;text-align:center">
+                <span class="pill pill-@priClass">P@store.Priority</span>
+            </td>
+            <td style="padding:9px 12px" onclick="event.stopPropagation()">
+                <button class="saction-btn" style="background:#E6F1FB;color:#185FA5"
+                        onclick="openEdit('@store.StoreId')">✏ Edit</button>
+                <button class="saction-btn" style="background:#FAEEDA;color:#854F0B"
+                        onclick="openStatusEdit('@store.StoreId','@store.StoreCode','@store.FYCloseStatus')">⊙ Status</button>
+                <button class="saction-btn" style="background:#FCEBEB;color:#A32D2D"
+                        onclick="openDelete('@store.StoreId','@store.StoreCode','@store.StoreName')">🗑</button>
+            </td>
+        </tr>
+    }
+    </tbody>
+  </table>
+  <div style="padding:8px 12px;border-top:1px solid #F0F0F0;font-size:12px;color:#888" id="table-footer">
+      Showing @storeList.Count stores
+  </div>
+</div>
+
+@Html.AntiForgeryToken()
+
+<script>
+// ── CSRF token ─────────────────────────────────────────────────────────────
+const AF = document.querySelector('input[name="__RequestVerificationToken"]')?.value || '';
+
+// ── Toast ──────────────────────────────────────────────────────────────────
+function toast(msg, type = 'ok') {
+    const el = document.createElement('div');
+    el.className = 'toast-item';
+    el.style.background = type === 'ok' ? '#EAF3DE' : type === 'err' ? '#FCEBEB' : '#E6F1FB';
+    el.style.color = type === 'ok' ? '#3B6D11' : type === 'err' ? '#A32D2D' : '#185FA5';
+    el.style.borderLeft = '3px solid ' + (type === 'ok' ? '#639922' : type === 'err' ? '#E74C3C' : '#185FA5');
+    el.innerHTML = (type === 'ok' ? '✓ ' : type === 'err' ? '✗ ' : 'ℹ ') + msg;
+    document.getElementById('toasts').appendChild(el);
+    setTimeout(() => el.style.opacity = '0', 3000);
+    setTimeout(() => el.remove(), 3400);
+}
+
+// ── API helper ─────────────────────────────────────────────────────────────
+async function api(url, method = 'GET', body = null) {
+    const opts = { method, headers: { 'RequestVerificationToken': AF } };
+    if (body) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
+    const r = await fetch(url, opts);
+    return r.json();
+}
+
+// ── Search / filter table ──────────────────────────────────────────────────
+function filterTable() {
+    const q = document.getElementById('search-input').value.toLowerCase();
+    let visible = 0;
+    document.querySelectorAll('#store-tbody tr.store-row').forEach(row => {
+        const match = !q || row.dataset.search.toLowerCase().includes(q);
+        row.style.display = match ? '' : 'none';
+        if (match) visible++;
+    });
+    document.getElementById('table-footer').textContent = q
+        ? `Showing ${visible} of ${document.querySelectorAll('#store-tbody tr.store-row').length} stores (filtered)`
+        : `Showing ${visible} stores`;
+}
+
+// ── Modal helpers ──────────────────────────────────────────────────────────
+function closeModal() {
+    document.getElementById('store-modal').classList.remove('open');
+}
+function resetForm() {
+    ['f-storeId','f-storeCode','f-storeName','f-zone','f-email','f-phone'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+    });
+    document.getElementById('f-region').value    = 'North';
+    document.getElementById('f-priority').value  = '2';
+    document.getElementById('f-storeCode').disabled = false;
+    document.getElementById('f-code-note').style.display = '';
+    document.getElementById('f-status-wrap').style.display = 'none';
+    document.getElementById('f-fystatus-wrap').style.display = 'none';
+}
+
+// ── OPEN CREATE ────────────────────────────────────────────────────────────
+function openCreate() {
+    resetForm();
+    document.getElementById('f-mode').value = 'create';
+    document.getElementById('modal-title').textContent = '+ Add New Store';
+    document.getElementById('modal-save-btn').textContent = 'Create Store';
+    document.getElementById('modal-save-btn').style.background = '#185FA5';
+    document.getElementById('store-modal').classList.add('open');
+    setTimeout(() => document.getElementById('f-storeCode').focus(), 100);
+}
+
+// ── OPEN EDIT ──────────────────────────────────────────────────────────────
+async function openEdit(storeId) {
+    const d = await api('/Store/Api/' + storeId);
+    if (d.error) { toast(d.error, 'err'); return; }
+
+    resetForm();
+    document.getElementById('f-mode').value     = 'edit';
+    document.getElementById('f-storeId').value  = storeId;
+    document.getElementById('f-storeCode').value = d.storeCode;
+    document.getElementById('f-storeCode').disabled = true; // code can't change
+    document.getElementById('f-storeName').value = d.storeName;
+    document.getElementById('f-region').value   = d.region;
+    document.getElementById('f-zone').value     = d.zone || '';
+    document.getElementById('f-priority').value = d.priority;
+    document.getElementById('f-email').value    = d.contactEmail || '';
+    document.getElementById('f-phone').value    = d.contactPhone || '';
+    document.getElementById('f-status').value   = d.status;
+    document.getElementById('f-fystatus').value = d.fyCloseStatus;
+    document.getElementById('f-code-note').style.display   = 'none';
+    document.getElementById('f-status-wrap').style.display  = '';
+    document.getElementById('f-fystatus-wrap').style.display = '';
+
+    document.getElementById('modal-title').textContent = '✏ Edit Store — ' + d.storeCode;
+    document.getElementById('modal-save-btn').textContent = 'Save Changes';
+    document.getElementById('modal-save-btn').style.background = '#3B6D11';
+    document.getElementById('store-modal').classList.add('open');
+}
+
+// ── OPEN STATUS QUICK EDIT ─────────────────────────────────────────────────
+async function openStatusEdit(storeId, storeCode, currentFY) {
+    const statuses = ['Pending','Completed','Failed','Offline','Skipped'];
+    const colors = {
+        Pending:'#6C757D',Completed:'#3B6D11',Failed:'#A32D2D',
+        Offline:'#5F5E5A',Skipped:'#185FA5'
+    };
+    const bgs = {
+        Pending:'#F0F0F0',Completed:'#EAF3DE',Failed:'#FCEBEB',
+        Offline:'#F1EFE8',Skipped:'#E6F1FB'
+    };
+
+    // Inline quick-status picker via a simple confirm-style approach
+    const choice = await showQuickPicker(
+        `FY Close Status for ${storeCode}`,
+        statuses, currentFY, colors, bgs
+    );
+    if (!choice) return;
+
+    const r = await api(`/Store/Api/SetStatus/${storeId}`, 'PATCH',
+        { fyCloseStatus: choice });
+    if (r.success) {
+        toast(r.message || `${storeCode} → ${choice}`, 'ok');
+        setTimeout(() => location.reload(), 800);
+    } else {
+        toast(r.error || 'Error', 'err');
+    }
+}
+
+// Tiny inline picker
+function showQuickPicker(title, options, current, colors, bgs) {
+    return new Promise(resolve => {
+        const mask = document.createElement('div');
+        mask.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:6000;display:flex;align-items:center;justify-content:center';
+        mask.innerHTML = `
+            <div style="background:#fff;border-radius:12px;padding:24px;min-width:340px;box-shadow:0 20px 60px rgba(0,0,0,.25)">
+                <h3 style="font-size:15px;font-weight:700;color:#1F3864;margin:0 0 16px">${title}</h3>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px">
+                    ${options.map(o => `
+                        <button data-val="${o}" style="padding:8px 16px;border-radius:8px;border:2px solid ${colors[o]||'#DDD'};background:${o===current?bgs[o]:'#fff'};color:${colors[o]||'#555'};font-size:13px;cursor:pointer;font-weight:${o===current?'700':'400'}" onclick="this.parentNode.querySelectorAll('button').forEach(b=>b.style.fontWeight='400');this.style.fontWeight='700';this.style.background='${bgs[o]||'#EEE'}';document.getElementById('qp-selected').value='${o}'">${o}</button>
+                    `).join('')}
+                </div>
+                <input type="hidden" id="qp-selected" value="${current}"/>
+                <div style="display:flex;gap:8px;justify-content:flex-end">
+                    <button id="qp-cancel" style="padding:8px 18px;background:#EEE;color:#555;border:none;border-radius:7px;font-size:13px;cursor:pointer">Cancel</button>
+                    <button id="qp-apply" style="padding:8px 18px;background:#185FA5;color:#fff;border:none;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer">Apply</button>
+                </div>
+            </div>`;
+        document.body.appendChild(mask);
+        mask.querySelector('#qp-cancel').onclick = () => { mask.remove(); resolve(null); };
+        mask.querySelector('#qp-apply').onclick  = () => { const v=mask.querySelector('#qp-selected').value; mask.remove(); resolve(v); };
+    });
+}
+
+// ── OPEN DELETE ────────────────────────────────────────────────────────────
+function openDelete(storeId, storeCode, storeName) {
+    document.getElementById('delete-confirm-text').innerHTML =
+        `You are about to decommission <strong>${storeCode} — ${storeName}</strong>.<br>
+        All terminals will be disconnected from active operations.`;
+
+    const btn = document.getElementById('confirm-delete-btn');
+    btn.onclick = async () => {
+        btn.disabled = true;
+        btn.textContent = 'Processing…';
+        const r = await api(`/Store/Api/Delete/${storeId}`, 'DELETE');
+        if (r.success) {
+            document.getElementById('delete-modal').classList.remove('open');
+            toast(r.message || 'Store decommissioned', 'ok');
+            // Remove row from table
+            document.querySelector(`tr[data-storeid="${storeId}"]`)?.remove();
+            const remaining = document.querySelectorAll('#store-tbody tr.store-row:not([style*="none"])').length;
+            document.getElementById('store-count-label').textContent = remaining + ' stores registered';
+            document.getElementById('table-footer').textContent = 'Showing ' + remaining + ' stores';
+        } else {
+            toast(r.error || 'Delete failed', 'err');
+        }
+        btn.disabled = false;
+        btn.textContent = 'Yes, Decommission';
+    };
+
+    document.getElementById('delete-modal').classList.add('open');
+}
+
+// ── SUBMIT FORM (Create or Edit) ───────────────────────────────────────────
+async function submitStoreForm(e) {
+    e.preventDefault();
+    const mode    = document.getElementById('f-mode').value;
+    const storeId = document.getElementById('f-storeId').value;
+    const btn     = document.getElementById('modal-save-btn');
+
+    const payload = {
+        storeCode:    document.getElementById('f-storeCode').value.trim().toUpperCase(),
+        storeName:    document.getElementById('f-storeName').value.trim(),
+        region:       document.getElementById('f-region').value,
+        zone:         document.getElementById('f-zone').value.trim(),
+        priority:     parseInt(document.getElementById('f-priority').value),
+        contactEmail: document.getElementById('f-email').value.trim(),
+        contactPhone: document.getElementById('f-phone').value.trim(),
+        status:       document.getElementById('f-status')?.value || 'Active',
+        fyCloseStatus: document.getElementById('f-fystatus')?.value || 'Pending',
+    };
+
+    if (!payload.storeName) { toast('Store Name is required', 'err'); return; }
+    if (mode === 'create' && !payload.storeCode) { toast('Store Code is required', 'err'); return; }
+
+    btn.disabled    = true;
+    btn.textContent = mode === 'create' ? 'Creating…' : 'Saving…';
+
+    try {
+        const url = mode === 'create'
+            ? '/Store/Api/Create'
+            : `/Store/Api/Update/${storeId}`;
+        const method = mode === 'create' ? 'POST' : 'PUT';
+
+        const r = await api(url, method, payload);
+
+        if (r.success) {
+            closeModal();
+            toast(r.message || (mode === 'create' ? 'Store created!' : 'Store updated!'), 'ok');
+            // Reload page to show updated data
+            setTimeout(() => location.reload(), 600);
+        } else {
+            toast(r.error || 'Operation failed', 'err');
+        }
+    } catch (ex) {
+        toast('Request failed: ' + ex.message, 'err');
+    }
+
+    btn.disabled    = false;
+    btn.textContent = mode === 'create' ? 'Create Store' : 'Save Changes';
+}
+
+// Close modal on backdrop click
+document.getElementById('store-modal').addEventListener('click', function(e) {
+    if (e.target === this) closeModal();
+});
+document.getElementById('delete-modal').addEventListener('click', function(e) {
+    if (e.target === this) this.classList.remove('open');
+});
+</script>

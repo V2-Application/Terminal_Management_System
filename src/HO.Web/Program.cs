@@ -35,6 +35,12 @@ builder.Services.AddAuthentication("Cookies")
 
 builder.Services.AddAuthorization();
 
+// Allow antiforgery token via custom header (for AJAX fetch calls)
+builder.Services.AddAntiforgery(opts =>
+{
+    opts.HeaderName = "RequestVerificationToken";  // matches what JS sends
+});
+
 var app = builder.Build();
 
 // DB init — create tables + seed if needed

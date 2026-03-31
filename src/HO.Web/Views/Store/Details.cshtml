@@ -3,12 +3,18 @@
     ViewData["Title"] = Model.StoreName;
 }
 
-<div style="margin-bottom:12px;display:flex;justify-content:space-between;align-items:center">
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
     <a href="/Store" style="font-size:13px;color:#185FA5">← Store Master</a>
-    <a href="/Terminal/Bind?storeId=@Model.StoreId"
-       style="padding:7px 14px;background:#1F3864;color:#fff;border-radius:6px;font-size:12px;font-weight:500">
-        + Bind New Terminal
-    </a>
+    <div style="display:flex;gap:8px">
+        <button onclick="window.location='/Terminal/Bind?storeId=@Model.StoreId'"
+                style="padding:7px 14px;background:#1F3864;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:500;cursor:pointer">
+            + Bind Terminal
+        </button>
+        <button onclick="editStoreInline('@Model.StoreId')"
+                style="padding:7px 14px;background:#3B6D11;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:500;cursor:pointer">
+            ✏ Edit Store
+        </button>
+    </div>
 </div>
 
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
@@ -21,76 +27,76 @@
         <div style="padding:4px 0">
             @{
                 void Row(string label, string value, string color = "#212529") {
-                    <div style="padding:8px 16px;border-bottom:1px solid #F5F5F5;display:flex;justify-content:space-between">
+                    <div style="padding:8px 16px;border-bottom:1px solid #F5F5F5;display:flex;justify-content:space-between;align-items:center">
                         <span style="font-size:12px;color:#888">@label</span>
                         <span style="font-size:13px;color:@color;font-weight:500">@value</span>
                     </div>;
                 }
-            }
-            @{ Row("Store Code", Model.StoreCode); }
-            @{ Row("Store Name", Model.StoreName); }
-            @{ Row("Region",     Model.Region + " / " + Model.Zone); }
-            @{ Row("Priority",   "P" + Model.Priority); }
-            @{ Row("Status",     Model.Status.ToString()); }
-            @{
                 var fyColor = Model.FYCloseStatus.ToString() switch {
                     "Completed" => "#3B6D11", "Failed" => "#A32D2D", _ => "#6C757D"
                 };
             }
+            @{ Row("Store Code", Model.StoreCode); }
+            @{ Row("Store Name", Model.StoreName); }
+            @{ Row("Region", Model.Region + " / " + Model.Zone); }
+            @{ Row("Priority", "P" + Model.Priority + (Model.Priority==1?" (High)":Model.Priority==2?" (Normal)":" (Low)")); }
+            @{ Row("Status", Model.Status.ToString()); }
             @{ Row("FY Close Status", Model.FYCloseStatus.ToString(), fyColor); }
-            @{ Row("Contact",    Model.ContactEmail ?? "—"); }
-            @{ Row("Phone",      Model.ContactPhone ?? "—"); }
+            @{ Row("Contact Email", Model.ContactEmail ?? "—"); }
+            @{ Row("Contact Phone", Model.ContactPhone ?? "—"); }
+            @{ Row("Created", Model.CreatedAt.ToString("dd MMM yyyy HH:mm")); }
         </div>
     </div>
 
-    <!-- Terminals list -->
+    <!-- Terminals -->
     <div style="background:#fff;border:1px solid #E8E8E8;border-radius:10px;overflow:hidden">
         <div style="padding:12px 16px;background:#F8F9FA;border-bottom:1px solid #E8E8E8;font-size:13px;font-weight:600;display:flex;justify-content:space-between;align-items:center">
             <span>Terminals (@Model.Terminals.Count)</span>
             <a href="/Terminal/Bind?storeId=@Model.StoreId"
-               style="font-size:11px;padding:3px 10px;background:#185FA5;color:#fff;border-radius:4px">+ Bind</a>
+               style="font-size:11px;padding:3px 10px;background:#185FA5;color:#fff;border-radius:4px;text-decoration:none">+ Bind</a>
         </div>
         @if (!Model.Terminals.Any())
         {
             <div style="padding:32px;text-align:center;color:#888">
                 <div style="font-size:24px;margin-bottom:8px">🖥️</div>
-                <div style="font-size:13px;margin-bottom:12px">No terminals bound to this store yet</div>
+                <div style="font-size:13px;margin-bottom:12px">No terminals bound yet</div>
                 <a href="/Terminal/Bind?storeId=@Model.StoreId"
-                   style="padding:8px 16px;background:#185FA5;color:#fff;border-radius:6px;font-size:13px;font-weight:500">
+                   style="padding:8px 16px;background:#185FA5;color:#fff;border-radius:6px;font-size:13px;font-weight:500;text-decoration:none">
                     Bind First Terminal
                 </a>
             </div>
         }
         else
         {
-            <table>
+            <table style="width:100%;border-collapse:collapse">
                 <thead>
-                    <tr>
-                        <th>Terminal</th><th>Status</th><th>Last HB</th><th></th>
+                    <tr style="background:#F8F9FA;border-bottom:1px solid #E8E8E8">
+                        <th style="padding:8px 12px;font-size:11px;font-weight:600;color:#888;text-transform:uppercase;text-align:left">Terminal</th>
+                        <th style="padding:8px 12px;font-size:11px;font-weight:600;color:#888;text-transform:uppercase;text-align:left">Status</th>
+                        <th style="padding:8px 12px;font-size:11px;font-weight:600;color:#888;text-transform:uppercase;text-align:left">Last HB</th>
+                        <th style="padding:8px 12px"></th>
                     </tr>
                 </thead>
                 <tbody>
                 @foreach (var t in Model.Terminals.OrderBy(t => !t.IsPrimary))
                 {
                     var isOn = t.Status == HO.Domain.Enums.TerminalStatus.Active;
-                    <tr>
-                        <td>
+                    <tr style="border-bottom:1px solid #F5F5F5">
+                        <td style="padding:8px 12px">
                             <span style="font-family:monospace;font-size:12px;font-weight:600">@t.TerminalCode</span>
                             @if (t.IsPrimary) { <span style="font-size:10px;background:#E6F1FB;color:#185FA5;padding:1px 5px;border-radius:3px;margin-left:4px">PRIMARY</span> }
                         </td>
-                        <td>
+                        <td style="padding:8px 12px">
                             <span style="@(isOn?"background:#EAF3DE;color:#3B6D11":"background:#FCEBEB;color:#A32D2D");padding:2px 7px;border-radius:4px;font-size:11px;font-weight:500">
                                 @(isOn?"● Online":"● Offline")
                             </span>
                         </td>
-                        <td style="font-size:11px;color:#888">
+                        <td style="padding:8px 12px;font-size:11px;color:#888">
                             @(t.LastHeartbeat.HasValue ? t.LastHeartbeat.Value.ToString("HH:mm dd-MMM") : "Never")
                         </td>
-                        <td>
+                        <td style="padding:8px 12px">
                             <a href="/Terminal/Details/@t.TerminalId"
-                               style="font-size:11px;padding:3px 9px;background:#F0F0F0;color:#555;border-radius:4px">
-                                Ping / Execute →
-                            </a>
+                               style="font-size:11px;padding:3px 9px;background:#F0F0F0;color:#555;border-radius:4px;text-decoration:none">Execute →</a>
                         </td>
                     </tr>
                 }
@@ -99,3 +105,9 @@
         }
     </div>
 </div>
+
+<script>
+async function editStoreInline(storeId) {
+    window.location = '/Store?editId=' + storeId;
+}
+</script>
