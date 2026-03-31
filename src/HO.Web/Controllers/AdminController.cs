@@ -460,30 +460,7 @@ public class AdminController : Controller
             }
         });
     }
-}
 
-// ── DTOs ────────────────────────────────────────────────────────────────────
-public record StoreUpsertDto(
-    string StoreCode, string StoreName, string Region, string Zone,
-    int Priority, string Status, string? ContactEmail, string? ContactPhone);
-
-public record StatusDto(string Status, string? FYCloseStatus = null);
-
-public record TerminalUpdateDto(
-    string? IpAddress, string? AgentVersion, string? PosVersion, bool IsPrimary);
-
-public record FYJobUpdateDto(
-    int WaveSize, int WaveIntervalMinutes,
-    DateTime ExecutionWindowStart, DateTime ExecutionWindowEnd);
-
-public record PackageCreateDto(
-    string PackageName, string StepType, string Version, string? DllVersion,
-    long FileSize, string Sha256Hash, string StoragePath,
-    bool IsActive, bool IsRollbackPackage, string? FYYear);
-
-public record PurgeDto(int OlderThanDays);
-
-    // ══════════════════════════════════════════════════════════════════════
     // USER MANAGEMENT (SuperAdmin only)
     // ══════════════════════════════════════════════════════════════════════
     [HttpGet("Users")]
@@ -582,6 +559,29 @@ public record PurgeDto(int OlderThanDays);
         await _db.SaveChangesAsync(ct);
         return Json(new { success = true });
     }
+}
+
+// ── DTOs ───────────────────────────────────────────────────────────────────
+public record StoreUpsertDto(
+    string StoreCode, string StoreName, string Region, string Zone,
+    int Priority, string Status, string? ContactEmail, string? ContactPhone);
+
+public record StatusDto(string Status, string? FYCloseStatus = null);
+
+public record TerminalUpdateDto(
+    string? IpAddress, string? AgentVersion, string? PosVersion, bool IsPrimary);
+
+public record FYJobUpdateDto(
+    int WaveSize, int WaveIntervalMinutes,
+    DateTime ExecutionWindowStart, DateTime ExecutionWindowEnd);
+
+public record PackageCreateDto(
+    string PackageName, string StepType, string Version, string? DllVersion,
+    long FileSize, string Sha256Hash, string StoragePath,
+    bool IsActive, bool IsRollbackPackage, string? FYYear);
+
+public record PurgeDto(int OlderThanDays);
 public record UserCreateDto(string Username, string FullName, string Email, string Password, string Role, bool MustChangePassword);
 public record UserUpdateDto(string FullName, string Email, string Role, bool IsActive, bool MustChangePassword);
 public record ResetPasswordDto(string NewPassword, bool MustChangePassword);
+
