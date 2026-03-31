@@ -107,9 +107,14 @@
         </div>
 
         <div style="padding:10px 14px;border-top:1px solid #E8E8E8">
-            <div style="font-size:11px;color:#9E9E9E">@User.Identity?.Name</div>
-            <a asp-controller="Account" asp-action="Logout"
-               style="font-size:11px;color:#dc3545">Sign out</a>
+            <a asp-controller="Account" asp-action="Profile" style="text-decoration:none">
+                <div style="font-size:12px;font-weight:600;color:#1F3864">@(User.FindFirst("FullName")?.Value ?? User.Identity?.Name)</div>
+                <div style="font-size:11px;color:#9E9E9E">@(User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value ?? "—")</div>
+            </a>
+            <div style="display:flex;gap:10px;margin-top:5px">
+                <a asp-controller="Account" asp-action="ChangePassword" style="font-size:11px;color:#185FA5;text-decoration:none">Change Pwd</a>
+                <a asp-controller="Account" asp-action="Logout" style="font-size:11px;color:#dc3545;text-decoration:none">Sign out</a>
+            </div>
         </div>
     </nav>
 

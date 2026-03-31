@@ -1,0 +1,28 @@
+@model HO.Domain.Entities.HoUser
+@{
+    ViewData["Title"] = "My Profile";
+}
+<div style="max-width:560px">
+    <div style="background:#fff;border:1px solid #E8E8E8;border-radius:12px;padding:24px;margin-bottom:16px">
+        <div style="display:flex;align-items:center;gap:16px;margin-bottom:20px">
+            <div style="width:56px;height:56px;border-radius:50%;background:#185FA5;color:#fff;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;flex-shrink:0">
+                @Model.FullName[0]
+            </div>
+            <div>
+                <div style="font-size:18px;font-weight:700;color:#1F3864">@Model.FullName</div>
+                <div style="font-size:13px;color:#888">@Model.Email</div>
+                <span style="font-size:11px;background:#E6F1FB;color:#185FA5;padding:2px 8px;border-radius:4px;font-weight:600">@Model.Role</span>
+            </div>
+        </div>
+        <table style="width:100%;font-size:13px">
+            <tr><td style="padding:7px 0;color:#888;width:140px">Username</td><td style="font-family:monospace;font-weight:600">@Model.Username</td></tr>
+            <tr><td style="padding:7px 0;color:#888">Last Login</td><td>@(Model.LastLoginAt?.ToString("dd MMM yyyy HH:mm") ?? "Never")</td></tr>
+            <tr><td style="padding:7px 0;color:#888">Last Login IP</td><td style="font-family:monospace">@(Model.LastLoginIp ?? "—")</td></tr>
+            <tr><td style="padding:7px 0;color:#888">Account Created</td><td>@Model.CreatedAt.ToString("dd MMM yyyy")</td></tr>
+        </table>
+    </div>
+    <a asp-action="ChangePassword"
+       style="display:inline-block;padding:9px 18px;background:#1F3864;color:#fff;border-radius:7px;font-size:13px;font-weight:500;text-decoration:none">
+        Change Password
+    </a>
+</div>

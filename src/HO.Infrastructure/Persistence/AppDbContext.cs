@@ -15,6 +15,7 @@ public class AppDbContext : DbContext
     public DbSet<ScriptPackage> ScriptPackages => Set<ScriptPackage>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<Heartbeat> Heartbeats => Set<Heartbeat>();
+    public DbSet<HoUser> HoUsers => Set<HoUser>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

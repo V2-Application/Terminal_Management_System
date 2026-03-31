@@ -482,3 +482,106 @@ public record PackageCreateDto(
     bool IsActive, bool IsRollbackPackage, string? FYYear);
 
 public record PurgeDto(int OlderThanDays);
+
+    // ══════════════════════════════════════════════════════════════════════
+    // USER MANAGEMENT (SuperAdmin only)
+    // ══════════════════════════════════════════════════════════════════════
+    [HttpGet("Users")]
+    public async Task<JsonResult> GetUsers(CancellationToken ct)
+    {
+        var users = await _db.HoUsers
+            .OrderBy(u => u.Role).ThenBy(u => u.Username)
+            .Select(u => new {
+                u.UserId, u.Username, u.FullName, u.Email,
+                u.Role, u.IsActive, u.MustChangePassword,
+                u.LastLoginAt, u.LastLoginIp,
+                u.FailedLoginCount, u.LockedUntil,
+                u.CreatedAt
+            }).ToListAsync(ct);
+        return Json(users);
+    }
+
+    [HttpPost("Users")]
+    public async Task<JsonResult> CreateUser([FromBody] UserCreateDto dto, CancellationToken ct)
+    {
+        if (await _db.HoUsers.AnyAsync(u => u.Username == dto.Username, ct))
+            return Json(new { success = false, error = "Username already exists" });
+
+        var user = new HO.Domain.Entities.HoUser
+        {
+            Username          = dto.Username.Trim(),
+            FullName          = dto.FullName,
+            Email             = dto.Email,
+            PasswordHash      = BCrypt.Net.BCrypt.HashPassword(dto.Password, 12),
+            Role              = dto.Role,
+            IsActive          = true,
+            MustChangePassword = dto.MustChangePassword,
+            CreatedBy         = User.Identity?.Name ?? "ADMIN"
+        };
+        _db.HoUsers.Add(user);
+        await _db.SaveChangesAsync(ct);
+        return Json(new { success = true, userId = user.UserId });
+    }
+
+    [HttpPut("Users/{id}")]
+    public async Task<JsonResult> UpdateUser(Guid id, [FromBody] UserUpdateDto dto, CancellationToken ct)
+    {
+        var user = await _db.HoUsers.FindAsync(new object[] { id }, ct);
+        if (user == null) return Json(new { success = false, error = "Not found" });
+
+        user.FullName          = dto.FullName;
+        user.Email             = dto.Email;
+        user.Role              = dto.Role;
+        user.IsActive          = dto.IsActive;
+        user.MustChangePassword = dto.MustChangePassword;
+        user.UpdatedAt         = DateTime.UtcNow;
+        await _db.SaveChangesAsync(ct);
+        return Json(new { success = true });
+    }
+
+    [HttpPatch("Users/{id}/password")]
+    public async Task<JsonResult> ResetPassword(Guid id, [FromBody] ResetPasswordDto dto, CancellationToken ct)
+    {
+        var user = await _db.HoUsers.FindAsync(new object[] { id }, ct);
+        if (user == null) return Json(new { success = false, error = "Not found" });
+
+        user.PasswordHash       = BCrypt.Net.BCrypt.HashPassword(dto.NewPassword, 12);
+        user.MustChangePassword = dto.MustChangePassword;
+        user.FailedLoginCount   = 0;
+        user.LockedUntil        = null;
+        user.UpdatedAt          = DateTime.UtcNow;
+        await _db.SaveChangesAsync(ct);
+        return Json(new { success = true });
+    }
+
+    [HttpPatch("Users/{id}/unlock")]
+    public async Task<JsonResult> UnlockUser(Guid id, CancellationToken ct)
+    {
+        var user = await _db.HoUsers.FindAsync(new object[] { id }, ct);
+        if (user == null) return Json(new { success = false });
+        user.LockedUntil      = null;
+        user.FailedLoginCount = 0;
+        user.UpdatedAt        = DateTime.UtcNow;
+        await _db.SaveChangesAsync(ct);
+        return Json(new { success = true });
+    }
+
+    [HttpDelete("Users/{id}")]
+    public async Task<JsonResult> DeactivateUser(Guid id, CancellationToken ct)
+    {
+        var user = await _db.HoUsers.FindAsync(new object[] { id }, ct);
+        if (user == null) return Json(new { success = false });
+
+        // Prevent deactivating yourself
+        var myId = User.FindFirst("UserId")?.Value;
+        if (user.UserId.ToString() == myId)
+            return Json(new { success = false, error = "Cannot deactivate your own account" });
+
+        user.IsActive  = false;
+        user.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync(ct);
+        return Json(new { success = true });
+    }
+public record UserCreateDto(string Username, string FullName, string Email, string Password, string Role, bool MustChangePassword);
+public record UserUpdateDto(string FullName, string Email, string Role, bool IsActive, bool MustChangePassword);
+public record ResetPasswordDto(string NewPassword, bool MustChangePassword);

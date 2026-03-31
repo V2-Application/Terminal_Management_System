@@ -66,6 +66,7 @@
   <button class="tab-btn" onclick="showTab('packages')">📦 Packages</button>
   <button class="tab-btn" onclick="showTab('heartbeats')">💓 Heartbeats</button>
   <button class="tab-btn" onclick="showTab('audit')">📋 Audit Logs</button>
+  <button class="tab-btn" onclick="showTab('users')">👤 Users</button>
 </div>
 
 <!-- Stores pane -->
@@ -232,7 +233,7 @@ const loaders = {stores:loadStores,terminals:loadTerminals,commands:loadCommands
 
 function showTab(name){
   document.querySelectorAll('.tab-btn').forEach((b,i)=>{
-    const tabs=['stores','terminals','commands','fyjobs','packages','heartbeats','audit'];
+    const tabs=['stores','terminals','commands','fyjobs','packages','heartbeats','audit','users'];
     b.classList.toggle('active',tabs[i]===name);
   });
   document.querySelectorAll('.tab-pane').forEach(p=>{
