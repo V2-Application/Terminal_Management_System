@@ -1,124 +1,265 @@
 @{
     ViewData["Title"] = "Bind New Terminal";
     var store = ViewBag.Store as HO.Domain.Entities.Store;
-    var apiBase = "https://your-ho-server/api/v1";
+    var storeCode = store?.StoreCode ?? "ST001";
+    var storeName = store?.StoreName ?? "Store";
+    // Build absolute URL for the API
+    var scheme = Context.Request.Scheme;
+    var host = Context.Request.Host;
+    var apiBase = $"{scheme}://{host}/api/v1";
+    var hoWebBase = $"{scheme}://{host}";
 }
 
-<div style="margin-bottom:12px">
+<div style="margin-bottom:14px">
     <a href="/Terminal" style="font-size:13px;color:#185FA5">← All Terminals</a>
     @if (store != null) {
         <span style="color:#DDD;margin:0 8px">|</span>
-        <a href="/Store/Details/@store.StoreId" style="font-size:13px;color:#185FA5">@store.StoreCode — @store.StoreName</a>
+        <a href="/Store/Details/@store.StoreId" style="font-size:13px;color:#185FA5">@storeCode — @storeName</a>
     }
 </div>
 
-<div style="max-width:720px">
-
-    <div style="background:#1F3864;border-radius:10px;padding:20px 24px;margin-bottom:20px;color:#fff">
-        <div style="font-size:18px;font-weight:700;margin-bottom:6px">🔗 Bind a Store Terminal to RetailTMS</div>
-        <div style="font-size:13px;color:#AED6F1">
-            Follow these steps on the store PC to install the Store Agent and register it with Head Office.
-            The terminal will appear in the dashboard within 5 minutes.
-        </div>
+<!-- Header -->
+<div style="background:linear-gradient(135deg,#1F3864,#2C5282);border-radius:12px;padding:22px 26px;margin-bottom:20px;color:#fff">
+    <div style="font-size:18px;font-weight:700;margin-bottom:6px">🔗 Bind Store Terminal to RetailTMS</div>
+    <div style="font-size:13px;color:#AED6F1">
+        Store: <strong>@storeCode — @storeName</strong> &nbsp;·&nbsp;
+        API: <span style="font-family:monospace;font-size:12px;background:rgba(255,255,255,.15);padding:2px 8px;border-radius:4px">@apiBase</span>
     </div>
+</div>
 
-    <!-- Step 1 -->
-    <div style="background:#fff;border:1px solid #E8E8E8;border-radius:10px;padding:20px;margin-bottom:12px">
-        <div style="display:flex;gap:14px;align-items:flex-start">
-            <div style="width:32px;height:32px;border-radius:50%;background:#185FA5;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;flex-shrink:0">1</div>
-            <div style="flex:1">
-                <div style="font-size:14px;font-weight:600;margin-bottom:6px">Run this on the Store PC (as Administrator)</div>
-                <div style="font-size:12px;color:#888;margin-bottom:10px">Copy and paste into PowerShell (Run as Admin) on the store terminal:</div>
-                <div style="background:#0F0F0F;border-radius:6px;padding:14px;font-family:monospace;font-size:12px;color:#C3E88D;position:relative">
-                    <button onclick="copyCmd('step1-cmd')" style="position:absolute;top:8px;right:8px;padding:3px 10px;background:#333;color:#aaa;border:1px solid #444;border-radius:4px;font-size:11px;cursor:pointer">Copy</button>
-                    <pre id="step1-cmd" style="margin:0;white-space:pre-wrap"># Step 1: Download and install the Store Agent
-$url = "http://YOUR_HO_SERVER/api/v1/agent/download"
+<!-- Two column layout -->
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+
+<!-- ── LEFT: Quick Dev Setup ─────────────────────────────────────────────── -->
+<div>
+
+  <!-- Option A: Use Simulator (recommended for dev) -->
+  <div style="background:#fff;border:2px solid #185FA5;border-radius:10px;padding:18px;margin-bottom:14px">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+      <span style="background:#185FA5;color:#fff;width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0">⚡</span>
+      <div>
+        <div style="font-size:14px;font-weight:700;color:#1F3864">Option A — Use Simulator (Instant, No exe needed)</div>
+        <div style="font-size:12px;color:#888">Best for testing — no Store.Agent.exe installation required</div>
+      </div>
+    </div>
+    <a href="/Simulator"
+       style="display:block;text-align:center;padding:10px;background:#185FA5;color:#fff;border-radius:7px;font-size:13px;font-weight:600;text-decoration:none">
+        Open Terminal Simulator →
+    </a>
+    <div style="font-size:11px;color:#888;margin-top:8px;text-align:center">
+        Register a virtual terminal · Send heartbeats · Simulate command execution · See live on dashboard
+    </div>
+  </div>
+
+  <!-- Option B: Manual install with published exe -->
+  <div style="background:#fff;border:1px solid #E8E8E8;border-radius:10px;overflow:hidden;margin-bottom:14px">
+    <div style="padding:12px 16px;background:#F8F9FA;border-bottom:1px solid #E8E8E8;font-size:13px;font-weight:600;display:flex;justify-content:space-between;align-items:center">
+        <span>Option B — Real Agent Installation (Production)</span>
+        <span style="font-size:11px;background:#FAEEDA;color:#854F0B;padding:2px 7px;border-radius:4px">Requires exe publish</span>
+    </div>
+    <div style="padding:14px 16px">
+        <div style="font-size:12px;color:#888;margin-bottom:12px">
+            Run these steps on the store PC (as Administrator):
+        </div>
+
+        <!-- Step 1: Publish the agent first -->
+        <div style="margin-bottom:12px">
+            <div style="font-size:12px;font-weight:600;color:#1F3864;margin-bottom:6px">
+                Step 1 — Publish Store.Agent from Visual Studio (do this once on HO server):
+            </div>
+            <div style="background:#0F0F0F;border-radius:6px;padding:12px;font-family:monospace;font-size:11px;color:#C3E88D;position:relative">
+                <button onclick="copyText('publish-cmd')" style="position:absolute;top:6px;right:8px;padding:2px 8px;background:#333;color:#aaa;border:1px solid #444;border-radius:3px;font-size:10px;cursor:pointer">Copy</button>
+                <div id="publish-cmd"># In Visual Studio → right-click Store.Agent → Publish
+# OR from Developer Command Prompt:
+cd src\Store.Agent
+dotnet publish -c Release -r win-x64 --self-contained true -o C:\RetailTMS\AgentPublish
+# Then zip C:\RetailTMS\AgentPublish → place in HO.API\wwwroot\agent\StoreAgent.zip</div>
+            </div>
+        </div>
+
+        <!-- Step 2: Install on store PC -->
+        <div>
+            <div style="font-size:12px;font-weight:600;color:#1F3864;margin-bottom:6px">
+                Step 2 — Run on Store PC (PowerShell as Admin):
+            </div>
+            <div style="background:#0F0F0F;border-radius:6px;padding:12px;font-family:monospace;font-size:11px;color:#C3E88D;position:relative">
+                <button onclick="copyText('install-cmd')" style="position:absolute;top:6px;right:8px;padding:2px 8px;background:#333;color:#aaa;border:1px solid #444;border-radius:3px;font-size:10px;cursor:pointer">Copy</button>
+                <pre id="install-cmd" style="margin:0;white-space:pre-wrap"># Download from HO server
 $dest = "C:\RetailTMS"
 New-Item -ItemType Directory -Force -Path $dest
-Invoke-WebRequest -Uri $url -OutFile "$dest\StoreAgent.zip"
+Invoke-WebRequest -Uri "@(apiBase)/agent/download" -OutFile "$dest\StoreAgent.zip" -UseBasicParsing
 Expand-Archive "$dest\StoreAgent.zip" -DestinationPath $dest -Force
 
-# Step 2: Configure with YOUR store code
-$config = Get-Content "$dest\appsettings.json" | ConvertFrom-Json
-$config.AgentConfig.HoApiBaseUrl = "@apiBase"
-$config.AgentConfig.StoreCode = "@(store?.StoreCode ?? "ST001")"
-$config | ConvertTo-Json -Depth 5 | Set-Content "$dest\appsettings.json"
+# Auto-configure for this store
+Invoke-WebRequest -Uri "@(apiBase)/agent/config?storeCode=@storeCode" -OutFile "$dest\appsettings.json" -UseBasicParsing
 
-# Step 3: Install and start as Windows Service
-sc.exe create "RetailTMS.StoreAgent" binpath="$dest\Store.Agent.exe" start=auto
+# Install as Windows Service
+sc.exe create "RetailTMS.StoreAgent" binpath="$dest\Store.Agent.exe" start=auto displayname="RetailTMS Store Agent"
+sc.exe description "RetailTMS.StoreAgent" "RetailTMS Head Office connection agent"
 sc.exe start "RetailTMS.StoreAgent"
-Write-Host "✓ Store Agent installed and started"</pre>
-                </div>
+Write-Host "✓ Store Agent installed for @storeCode"</pre>
             </div>
         </div>
     </div>
+  </div>
 
-    <!-- Step 2 -->
-    <div style="background:#fff;border:1px solid #E8E8E8;border-radius:10px;padding:20px;margin-bottom:12px">
-        <div style="display:flex;gap:14px;align-items:flex-start">
-            <div style="width:32px;height:32px;border-radius:50%;background:#3B6D11;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;flex-shrink:0">2</div>
-            <div>
-                <div style="font-size:14px;font-weight:600;margin-bottom:4px">What happens automatically</div>
-                <div style="font-size:13px;color:#555;line-height:1.7">
-                    After the service starts, the agent will:<br>
-                    &nbsp;&nbsp;① Call <code style="background:#F0F0F0;padding:1px 5px;border-radius:3px">POST @apiBase/terminals/register</code> with the machine's BIOS ID<br>
-                    &nbsp;&nbsp;② Receive a <strong>TerminalId + JWT token</strong> from Head Office<br>
-                    &nbsp;&nbsp;③ Store credentials in <code style="background:#F0F0F0;padding:1px 5px;border-radius:3px">C:\ProgramData\RetailTMS\agent.credentials.dat</code> (DPAPI encrypted)<br>
-                    &nbsp;&nbsp;④ Start polling <code style="background:#F0F0F0;padding:1px 5px;border-radius:3px">GET /commands/pending</code> every 60 seconds<br>
-                    &nbsp;&nbsp;⑤ Send heartbeat every 5 minutes → terminal appears as <span style="color:#3B6D11;font-weight:600">● ONLINE</span> in dashboard
-                </div>
-            </div>
+  <!-- Option C: Manual copy (dev without publish) -->
+  <div style="background:#fff;border:1px solid #E8E8E8;border-radius:10px;overflow:hidden">
+    <div style="padding:12px 16px;background:#F8F9FA;border-bottom:1px solid #E8E8E8;font-size:13px;font-weight:600">
+        Option C — Manual Copy (Dev, Same Machine)
+    </div>
+    <div style="padding:14px 16px">
+        <div style="font-size:12px;color:#888;margin-bottom:10px">
+            If running on the same dev machine as Visual Studio:
+        </div>
+        <div style="background:#0F0F0F;border-radius:6px;padding:12px;font-family:monospace;font-size:11px;color:#C3E88D;position:relative">
+            <button onclick="copyText('manual-cmd')" style="position:absolute;top:6px;right:8px;padding:2px 8px;background:#333;color:#aaa;border:1px solid #444;border-radius:3px;font-size:10px;cursor:pointer">Copy</button>
+            <pre id="manual-cmd" style="margin:0;white-space:pre-wrap">$dest = "C:\RetailTMS"
+New-Item -ItemType Directory -Force -Path $dest
+
+# Find published output (adjust path to your solution)
+$src = "D:\AKASH\Terminal_Management_System\src\Store.Agent\bin\Debug\net8.0-windows\win-x64"
+if (Test-Path $src) { Copy-Item "$src\*" $dest -Recurse -Force }
+
+# Configure for @storeCode
+$cfg = Get-Content "$dest\appsettings.json" | ConvertFrom-Json
+$cfg.AgentConfig.HoApiBaseUrl = "@apiBase"
+$cfg.AgentConfig.StoreCode = "@storeCode"
+$cfg | ConvertTo-Json -Depth 5 | Set-Content "$dest\appsettings.json"
+
+# Run directly (as console app, not service — for testing)
+Set-Location $dest
+.\Store.Agent.exe</pre>
         </div>
     </div>
-
-    <!-- Step 3 -->
-    <div style="background:#fff;border:1px solid #E8E8E8;border-radius:10px;padding:20px;margin-bottom:12px">
-        <div style="display:flex;gap:14px;align-items:flex-start">
-            <div style="width:32px;height:32px;border-radius:50%;background:#854F0B;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;flex-shrink:0">3</div>
-            <div>
-                <div style="font-size:14px;font-weight:600;margin-bottom:6px">Verify the terminal is bound</div>
-                <div style="font-size:13px;color:#555;margin-bottom:10px">After ~2 minutes, check:</div>
-                <div style="display:flex;gap:10px;flex-wrap:wrap">
-                    <a href="/Terminal" style="padding:8px 16px;background:#185FA5;color:#fff;border-radius:6px;font-size:13px;font-weight:500">
-                        📋 View All Terminals
-                    </a>
-                    @if (store != null) {
-                        <a href="/Store/Details/@store.StoreId" style="padding:8px 16px;background:#EBF3FB;color:#185FA5;border-radius:6px;font-size:13px;font-weight:500">
-                            🏪 View @store.StoreCode Terminals
-                        </a>
-                    }
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Agent folder layout -->
-    <div style="background:#fff;border:1px solid #E8E8E8;border-radius:10px;padding:20px">
-        <div style="font-size:14px;font-weight:600;margin-bottom:12px">📁 Store Terminal File Layout (after install)</div>
-        <div style="background:#0F0F0F;border-radius:6px;padding:14px;font-family:monospace;font-size:12px;color:#9FA8A3">
-            <div style="color:#378ADD">C:\RetailTMS\</div>
-            <div style="padding-left:20px;color:#C3E88D">Store.Agent.exe              <span style="color:#555">← Windows Service binary</span></div>
-            <div style="padding-left:20px;color:#C3E88D">appsettings.json             <span style="color:#555">← Config (HoApiBaseUrl, StoreCode)</span></div>
-            <div style="padding-left:20px;color:#FAC775">PackageCache\                <span style="color:#555">← Downloaded DLL packages cached here</span></div>
-            <div style="padding-left:20px;color:#FAC775">Logs\                        <span style="color:#555">← Execution logs (agent-YYYY-MM-DD.log)</span></div>
-            <div style="padding-left:20px;color:#F09595">agent.db                     <span style="color:#555">← SQLite (nonce cache, offline results)</span></div>
-            <div style="padding-left:20px">&nbsp;</div>
-            <div style="color:#378ADD">C:\ProgramData\RetailTMS\</div>
-            <div style="padding-left:20px;color:#F09595">agent.credentials.dat        <span style="color:#555">← DPAPI encrypted (TerminalId + JWT)</span></div>
-            <div style="padding-left:20px">&nbsp;</div>
-            <div style="color:#378ADD">%TEMP%\FYBackup\</div>
-            <div style="padding-left:20px;color:#9FA8A3">{commandId}\                 <span style="color:#555">← DLL backups created before each update</span></div>
-        </div>
-    </div>
+  </div>
 
 </div>
 
+<!-- ── RIGHT: What happens + Status ─────────────────────────────────────── -->
+<div>
+
+  <!-- Agent version check -->
+  <div style="background:#fff;border:1px solid #E8E8E8;border-radius:10px;overflow:hidden;margin-bottom:14px">
+    <div style="padding:12px 16px;background:#F8F9FA;border-bottom:1px solid #E8E8E8;font-size:13px;font-weight:600;display:flex;justify-content:space-between;align-items:center">
+        <span>Agent Package Status</span>
+        <button onclick="checkAgentVersion()" style="font-size:11px;padding:3px 10px;background:#E6F1FB;color:#185FA5;border:none;border-radius:4px;cursor:pointer">Check</button>
+    </div>
+    <div id="agent-version-box" style="padding:14px 16px;font-size:13px;color:#888">
+        Click Check to verify agent package is ready for download...
+    </div>
+  </div>
+
+  <!-- What happens automatically -->
+  <div style="background:#fff;border:1px solid #E8E8E8;border-radius:10px;overflow:hidden;margin-bottom:14px">
+    <div style="padding:12px 16px;background:#F8F9FA;border-bottom:1px solid #E8E8E8;font-size:13px;font-weight:600">
+        What Happens When Agent Starts
+    </div>
+    <div style="padding:14px 16px">
+        @{
+            var steps = new (string icon, string title, string desc)[]
+            {
+                ("①","Register with HO",$"POST {apiBase}/terminals/register → gets TerminalId + JWT"),
+                ("②","Save credentials","Stored in C:\\ProgramData\\RetailTMS\\agent.credentials.dat (DPAPI encrypted)"),
+                ("③","Start polling",$"GET {apiBase}/commands/pending every 60 seconds"),
+                ("④","Send heartbeat","POST /heartbeat every 5 min → terminal shows ● ONLINE on dashboard"),
+                ("⑤","Execute commands","Runs BAT scripts when FY-Close jobs are dispatched from HO"),
+            };
+        }
+        @foreach (var (icon, title, desc) in steps)
+        {
+            <div style="display:flex;gap:12px;margin-bottom:12px">
+                <span style="color:#185FA5;font-size:16px;flex-shrink:0;width:20px">@icon</span>
+                <div>
+                    <div style="font-size:13px;font-weight:600;color:#1F3864">@title</div>
+                    <div style="font-size:11px;color:#888;margin-top:2px;font-family:monospace;word-break:break-all">@desc</div>
+                </div>
+            </div>
+        }
+    </div>
+  </div>
+
+  <!-- Quick links -->
+  <div style="background:#fff;border:1px solid #E8E8E8;border-radius:10px;overflow:hidden;margin-bottom:14px">
+    <div style="padding:12px 16px;background:#F8F9FA;border-bottom:1px solid #E8E8E8;font-size:13px;font-weight:600">After Binding — Verify Here</div>
+    <div style="padding:12px 16px;display:flex;flex-direction:column;gap:8px">
+        <a href="/Terminal" style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:#E6F1FB;color:#185FA5;border-radius:6px;font-size:13px;font-weight:500;text-decoration:none">
+            ◈ All Terminals — see ● ONLINE
+        </a>
+        @if (store != null)
+        {
+            <a href="/Store/Details/@store.StoreId" style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:#EAF3DE;color:#3B6D11;border-radius:6px;font-size:13px;font-weight:500;text-decoration:none">
+                ☰ @storeCode Store Details
+            </a>
+        }
+        <a href="/Simulator" style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:#F0F0F0;color:#555;border-radius:6px;font-size:13px;font-weight:500;text-decoration:none">
+            ⚡ Terminal Simulator (no exe needed)
+        </a>
+    </div>
+  </div>
+
+  <!-- File layout reference -->
+  <div style="background:#0F0F0F;border-radius:10px;overflow:hidden">
+    <div style="padding:10px 14px;border-bottom:1px solid #1A1A1A;font-family:monospace;font-size:12px;color:#72D3A6">// File Layout After Install</div>
+    <div style="padding:12px 14px;font-family:monospace;font-size:12px">
+        <div style="color:#378ADD">C:\RetailTMS\</div>
+        <div style="padding-left:18px;color:#C3E88D">Store.Agent.exe       <span style="color:#555">← Windows Service</span></div>
+        <div style="padding-left:18px;color:#C3E88D">appsettings.json      <span style="color:#555">← Config (HoApiBaseUrl, StoreCode)</span></div>
+        <div style="padding-left:18px;color:#FAC775">PackageCache\         <span style="color:#555">← Downloaded DLL packages</span></div>
+        <div style="padding-left:18px;color:#FAC775">Logs\                 <span style="color:#555">← Daily log files</span></div>
+        <div style="padding-left:18px;color:#F09595">agent.db              <span style="color:#555">← SQLite (nonce cache)</span></div>
+        <br/>
+        <div style="color:#378ADD">C:\ProgramData\RetailTMS\</div>
+        <div style="padding-left:18px;color:#F09595">agent.credentials.dat <span style="color:#555">← DPAPI encrypted credentials</span></div>
+    </div>
+  </div>
+
+</div>
+</div>
+
 <script>
-function copyCmd(id) {
-    const text = document.getElementById(id).textContent;
-    navigator.clipboard.writeText(text).then(() => {
-        event.target.textContent = '✓ Copied!';
+async function checkAgentVersion() {
+    const box = document.getElementById('agent-version-box');
+    box.innerHTML = '<span style="color:#888">Checking...</span>';
+    try {
+        const r = await fetch('@(apiBase)/agent/version');
+        const d = await r.json();
+        if (d.packageAvailable) {
+            box.innerHTML = `
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+                    <span style="background:#EAF3DE;color:#3B6D11;padding:3px 10px;border-radius:4px;font-size:12px;font-weight:600">✓ Package Ready</span>
+                    <span style="font-size:12px;color:#888">v${d.version} · Published ${d.publishedAt}</span>
+                </div>
+                <div style="font-size:12px;color:#888">Download URL: <span style="font-family:monospace">${d.downloadUrl}</span></div>`;
+        } else {
+            box.innerHTML = `
+                <div style="background:#FAEEDA;color:#854F0B;border-radius:6px;padding:10px 12px;font-size:12px;margin-bottom:8px">
+                    ⚠ Agent package not yet published to HO server
+                </div>
+                <div style="font-size:12px;color:#555">
+                    <strong>To publish:</strong><br>
+                    1. In Visual Studio → right-click <code>Store.Agent</code> → Publish → Folder<br>
+                    2. Zip the output folder<br>
+                    3. Copy zip to: <code style="font-family:monospace">src/HO.API/wwwroot/agent/StoreAgent.zip</code><br>
+                    4. Restart HO.API
+                </div>
+                <div style="margin-top:10px;font-size:12px;color:#185FA5">
+                    💡 Use <strong><a href="/Simulator" style="color:#185FA5">Terminal Simulator</a></strong> for instant testing without publishing
+                </div>`;
+        }
+    } catch(e) {
+        box.innerHTML = '<span style="color:#A32D2D">Could not reach API: ' + e.message + '</span>';
+    }
+}
+
+function copyText(id) {
+    const text = document.getElementById(id)?.textContent || '';
+    navigator.clipboard.writeText(text.trim()).then(() => {
+        event.target.textContent = '✓ Copied';
         setTimeout(() => event.target.textContent = 'Copy', 2000);
     });
 }
+
+// Auto-check on load
+window.addEventListener('load', checkAgentVersion);
 </script>
